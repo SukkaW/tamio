@@ -42,7 +42,7 @@ final class OpenSSHConfigResolverTests: XCTestCase {
             Port 22
             IdentityFile ~/keys/default
         """)
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         let results = try await OpenSSHConfigResolver.resolve(scan: scan, trusted: false)
         XCTAssertEqual(results.count, scan.hosts.count)
         for resolved in results {
@@ -54,6 +54,39 @@ final class OpenSSHConfigResolverTests: XCTestCase {
         XCTAssertEqual(alpha.options["user"], ["deploy"])
         XCTAssertEqual(alpha.options["port"], ["2201"])
         XCTAssertEqual(alpha.options["identityfile"], ["~/keys/first key", "~/keys/second", "~/keys/default"])
+    }
+
+    func testTheMacsSystemConfigurationAppliesAfterTheUsers() async throws {
+        try requireSSH()
+        let fixture = try SSHConfigFixture()
+        defer { fixture.remove() }
+        let system = try fixture.write("system_config", """
+        Host *
+            User system-user
+            Port 2222
+        Host system-only
+            HostName system.example
+        """)
+        let source = try fixture.write("config", """
+        Host beta
+            HostName beta.example
+        Host alpha
+            HostName alpha.example
+            User alpha-user
+        """)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: system.path)
+        XCTAssertEqual(scan.hosts.map(\.alias), ["beta", "alpha"], "the system file's aliases are defaults, not servers")
+        let results = try await OpenSSHConfigResolver.resolve(scan: scan, trusted: false)
+        let alpha = try XCTUnwrap(results.first { $0.candidate.alias == "alpha" })
+        let beta = try XCTUnwrap(results.first { $0.candidate.alias == "beta" })
+        XCTAssertEqual(alpha.options["user"], ["alpha-user"], "the user's own value comes first and wins")
+        XCTAssertEqual(alpha.options["port"], ["2222"])
+        XCTAssertEqual(beta.options["user"], ["system-user"], "not only the last Host block of the user's file gets the defaults")
+        XCTAssertEqual(beta.options["port"], ["2222"])
+
+        let unreadable = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: fixture.root.path)
+        XCTAssertEqual(unreadable.hosts.count, 2, "a system file that cannot be read does not stop the import")
+        XCTAssertFalse(unreadable.warnings.isEmpty)
     }
 
     func testNativeDifferentialRelativeIncludeUsesUserSSHDirectory() async throws {
@@ -69,7 +102,7 @@ final class OpenSSHConfigResolverTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: child) }
         try "Host relative\n  User relative-user\n  Port 2299\n".write(to: child, atomically: false, encoding: .utf8)
         let source = try fixture.write("config", "Include \(name)\nHost relative\n  HostName relative.example\n")
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         let resolved = try await OpenSSHConfigResolver.resolve(scan: scan, trusted: false)
         XCTAssertEqual(try XCTUnwrap(resolved.first).options, try nativeOptions(source, "relative"))
         XCTAssertEqual(scan.hosts.first?.source.path, child.path)
@@ -89,7 +122,7 @@ final class OpenSSHConfigResolverTests: XCTestCase {
         Host *
             ServerAliveInterval 31
         """)
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         let results = try await OpenSSHConfigResolver.resolve(scan: scan, trusted: false)
         XCTAssertEqual(results.first?.options, try nativeOptions(source, "quoted-host"))
         XCTAssertFalse(scan.requiresTrust)
@@ -106,7 +139,7 @@ final class OpenSSHConfigResolverTests: XCTestCase {
         Match exec "touch '\(marker.path)'"
             User approved
         """)
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         XCTAssertTrue(scan.requiresTrust)
         do {
             _ = try await OpenSSHConfigResolver.resolve(scan: scan, trusted: false)
@@ -128,7 +161,7 @@ final class OpenSSHConfigResolverTests: XCTestCase {
         let marker = fixture.root.appendingPathComponent("executed")
         let child = try fixture.write("child", "Host stable\n  User frozen\n")
         let source = try fixture.write("config", "Include \"\(child.path)\"\nHost stable\n  HostName frozen.example\n")
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         try fixture.write("child", "Match exec \"touch '\(marker.path)'\"\n  User changed\n")
         try fixture.write("config", "Match exec \"touch '\(marker.path)'\"\nHost stable\n  HostName changed.example\n")
         let results = try await OpenSSHConfigResolver.resolve(scan: scan, trusted: false)
@@ -142,12 +175,12 @@ final class OpenSSHConfigResolverTests: XCTestCase {
         let fixture = try SSHConfigFixture()
         defer { fixture.remove() }
         let source = try fixture.write("config", "Host bounded\n  HostName example.invalid\n")
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         let bounded = try await OpenSSHConfigResolver.resolve(scan: scan, trusted: false, limits: .init(outputBytes: 128))
         XCTAssertNotNil(bounded.first?.error)
         XCTAssertTrue(bounded.first?.options.isEmpty == true)
         try fixture.write("config", "Host invalid\n  InvalidSetting never-display-this-secret\n")
-        let invalid = try await OpenSSHConfigResolver.resolve(scan: OpenSSHConfigScanner.scan(path: source.path), trusted: false)
+        let invalid = try await OpenSSHConfigResolver.resolve(scan: OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil), trusted: false)
         let message = try XCTUnwrap(invalid.first?.error)
         XCTAssertFalse(message.contains("never-display-this-secret"))
     }
@@ -158,7 +191,7 @@ final class OpenSSHConfigResolverTests: XCTestCase {
         defer { fixture.remove() }
         let marker = fixture.root.appendingPathComponent("must-not-appear")
         let source = try fixture.write("config", "Host slow\nMatch exec \"sleep 1; touch '\(marker.path)'\"\n  User late\n")
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         let results = try await OpenSSHConfigResolver.resolve(scan: scan, trusted: true, limits: .init(hostSeconds: 0.1))
         XCTAssertNotNil(results.first?.error)
         try await Task.sleep(for: .milliseconds(1200))
@@ -172,7 +205,7 @@ final class OpenSSHConfigResolverTests: XCTestCase {
         let started = fixture.root.appendingPathComponent("started")
         let finished = fixture.root.appendingPathComponent("must-not-finish")
         let source = try fixture.write("config", "Host cancellable\nMatch exec \"touch '\(started.path)'; sleep 1; touch '\(finished.path)'\"\n  User late\n")
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         let task = Task { try await OpenSSHConfigResolver.resolve(scan: scan, trusted: true) }
         for _ in 0 ..< 100 {
             if FileManager.default.fileExists(atPath: started.path) { break }

@@ -122,11 +122,29 @@ private struct OpenSSHSnapshotFile: Sendable {
 }
 
 public enum OpenSSHConfigScanner {
-    public static func scan(path: String) throws -> OpenSSHScan {
+    public static let systemConfigPath = "/etc/ssh/ssh_config"
+
+    /// `systemConfig` is read the way ssh reads it, after the user's file, so
+    /// its defaults apply too; `ssh -G -F` would otherwise skip it.
+    public static func scan(path: String, systemConfig: String? = systemConfigPath) throws -> OpenSSHScan {
         var scanner = Scanner()
         let expanded = (path as NSString).expandingTildeInPath
         let source = URL(fileURLWithPath: expanded).standardizedFileURL.path
-        _ = try scanner.visit(source, depth: 0)
+        let root = try scanner.visit(source, depth: 0)
+        if let systemConfig, FileManager.default.fileExists(atPath: systemConfig) {
+            // The first value given for a setting wins, so the user's own come
+            // first. Match all keeps the system file out of the user's last
+            // Host block; its Host aliases are defaults, not servers.
+            scanner.collectsHosts = false
+            do {
+                let index = try scanner.visit(systemConfig, depth: 0)
+                scanner.files[root].lines += [.text("Match all"), .include([index])]
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                scanner.warn(String(localized: "The Mac's SSH configuration at \(systemConfig) could not be inspected, so its defaults are not applied: \(error.localizedDescription)"))
+            }
+        }
         return OpenSSHScan(sourcePath: source, hosts: scanner.hosts, warnings: scanner.warnings,
                            requiresTrust: scanner.requiresTrust, directives: scanner.directives,
                            snapshot: scanner.files)
@@ -149,6 +167,7 @@ public enum OpenSSHConfigScanner {
         var activeFiles: Set<String> = []
         var bytesRead = 0
         var directoryEntries = 0
+        var collectsHosts = true
 
         mutating func visit(_ path: String, depth: Int) throws -> Int {
             try Task.checkCancellation()
@@ -200,7 +219,7 @@ public enum OpenSSHConfigScanner {
                             warn(String(localized: "A Host alias at \(path):\(offset + 1) cannot safely be imported."))
                             continue
                         }
-                        if aliases.insert(alias.lowercased()).inserted {
+                        if collectsHosts, aliases.insert(alias.lowercased()).inserted {
                             guard hosts.count < Self.maximumHosts else {
                                 throw OpenSSHConfigError(String(localized: "The SSH configuration contains more than 512 server aliases."))
                             }

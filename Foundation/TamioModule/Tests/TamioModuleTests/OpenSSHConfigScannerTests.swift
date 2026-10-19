@@ -10,7 +10,7 @@ final class OpenSSHConfigScannerTests: XCTestCase {
         let child = try fixture.write("with space.conf", "Host plain\n  User deploy\n")
         let escaped = child.path.replacingOccurrences(of: " ", with: "\\ ")
         let source = try fixture.write("config", "Include \(escaped)\nHost *\n  PKCS11Provider none\n  IdentityFile2 ~/.ssh/id_rsa\n")
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         XCTAssertEqual(scan.hosts.map(\.alias), ["plain"])
         XCTAssertTrue(scan.warnings.isEmpty)
         XCTAssertTrue(scan.directives.contains("pkcs11provider"))
@@ -32,7 +32,7 @@ final class OpenSSHConfigScannerTests: XCTestCase {
             Port 2222
         Host -oBad
         """)
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         XCTAssertEqual(scan.hosts.map(\.alias), ["alpha", "Alias-A", "gamma", "beta"])
         XCTAssertEqual(scan.hosts[0].source, OpenSSHSourceLocation(path: source.path, line: 2))
         XCTAssertEqual(scan.hosts[2].source.path, includes.appendingPathComponent("10-first.conf").path)
@@ -48,7 +48,7 @@ final class OpenSSHConfigScannerTests: XCTestCase {
         let nested = try fixture.write("nested", "Match !exec \"touch '\(marker.path)'\"\n  User dangerous\n")
         let child = try fixture.write("child", "Include \"\(nested.path)\"\n")
         let source = try fixture.write("config", "Host safe\n  HostName safe.example\nHost never-match-*\n  Include \"\(child.path)\"\n")
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         XCTAssertTrue(scan.requiresTrust)
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
     }
@@ -58,7 +58,7 @@ final class OpenSSHConfigScannerTests: XCTestCase {
         defer { fixture.remove() }
         for text in ["Include %h.conf", "Include ${HOME}/.ssh/config", "Include \"unterminated", "Include", "Host alpha\u{0}beta", "Match exec \\\n"] {
             let source = try fixture.write("config", text)
-            XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: source.path), text)
+            XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil), text)
         }
     }
 
@@ -67,15 +67,15 @@ final class OpenSSHConfigScannerTests: XCTestCase {
         defer { fixture.remove() }
         let config = fixture.root.appendingPathComponent("config")
         try fixture.write("config", "Include \"\(config.path)\"\n")
-        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: config.path))
+        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: config.path, systemConfig: nil))
         let hardlink = fixture.root.appendingPathComponent("hardlink")
         try FileManager.default.linkItem(at: config, to: hardlink)
         try fixture.write("config", "Include \"\(hardlink.path)\"\n")
-        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: config.path))
+        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: config.path, systemConfig: nil))
         let fifo = fixture.root.appendingPathComponent("fifo")
         XCTAssertEqual(mkfifo(fifo.path, 0o600), 0)
-        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: fifo.path))
-        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: fixture.root.path))
+        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: fifo.path, systemConfig: nil))
+        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: fixture.root.path, systemConfig: nil))
     }
 
     func testSymlinksAreReadAndFrozenNotReopened() throws {
@@ -85,7 +85,7 @@ final class OpenSSHConfigScannerTests: XCTestCase {
         let link = fixture.root.appendingPathComponent("link")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: child)
         let source = try fixture.write("config", "Include \"\(link.path)\"\n")
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         try FileManager.default.removeItem(at: link)
         try fixture.write("link", "Match exec \"false\"\n")
         try fixture.write("config", "Match exec \"false\"\n")
@@ -106,7 +106,7 @@ final class OpenSSHConfigScannerTests: XCTestCase {
         defer { fixture.remove() }
         let missing = fixture.root.appendingPathComponent("missing-*.conf")
         let source = try fixture.write("config", "Include \"\(missing.path)\"\nHost only\n")
-        let scan = try OpenSSHConfigScanner.scan(path: source.path)
+        let scan = try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         try fixture.write("missing-new.conf", "Match exec \"false\"\n")
         let snapshot = try scan.materializeSnapshot(in: fixture.root.appendingPathComponent("snapshot"))
         XCTAssertFalse(try String(contentsOf: snapshot, encoding: .utf8).contains(missing.path))
@@ -118,9 +118,9 @@ final class OpenSSHConfigScannerTests: XCTestCase {
         let fixture = try SSHConfigFixture()
         defer { fixture.remove() }
         let large = try fixture.write("large", String(repeating: "# comment\n", count: 120000))
-        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: large.path))
+        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: large.path, systemConfig: nil))
         let aliases = try fixture.write("aliases", (0 ... 512).map { "Host alias\($0)\n" }.joined())
-        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: aliases.path))
+        XCTAssertThrowsError(try OpenSSHConfigScanner.scan(path: aliases.path, systemConfig: nil))
         for index in 0 ... 18 {
             let next = fixture.root.appendingPathComponent("depth-\(index + 1)").path
             try fixture.write("depth-\(index)", index == 18 ? "Host last\n" : "Include \"\(next)\"\n")
@@ -141,7 +141,7 @@ final class OpenSSHConfigScannerTests: XCTestCase {
         let source = try fixture.write("config", "Host example\n")
         let task = Task {
             withUnsafeCurrentTask { $0?.cancel() }
-            return try OpenSSHConfigScanner.scan(path: source.path)
+            return try OpenSSHConfigScanner.scan(path: source.path, systemConfig: nil)
         }
         do {
             _ = try await task.value
