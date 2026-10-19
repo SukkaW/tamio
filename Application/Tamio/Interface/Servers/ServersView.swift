@@ -17,6 +17,7 @@ struct ServersView: View {
 
     @State private var searchText = ""
     @State private var selection: RDMachine.ID?
+    @State private var importsSSHConfig = false
 
     var filtered: [RDMachine] {
         let machines = store.machineGroup.machines
@@ -38,11 +39,15 @@ struct ServersView: View {
             }
         ) {
         } trailing: {
+            Button { importsSSHConfig = true } label: {
+                Label("Import…", systemImage: "square.and.arrow.down")
+            }
+            .help(String(localized: "Import from SSH Config"))
             RedactionMenu()
             Button { router.openTerminals() } label: {
                 Label("Open Terminals…", systemImage: "rectangle.stack.badge.plus")
             }
-            .help("Pick several servers and open a terminal on each")
+            .help(String(localized: "Pick several servers and open a terminal on each"))
             .disabled(store.machineGroup.machines.isEmpty)
         } header: {
             VStack(alignment: .leading, spacing: RX.Space.s3) {
@@ -67,6 +72,9 @@ struct ServersView: View {
             } else {
                 ServersTable(machines: sorted, selection: $selection)
             }
+        }
+        .sheet(isPresented: $importsSSHConfig) {
+            SSHConfigImportSheet().environmentObject(store)
         }
         .background {
             // ⌘⌫ deletes the selected row.
@@ -96,7 +104,7 @@ struct RedactionMenu: View {
         .help(store.machineRedacted.tooltip)
     }
 
-    private func item(_ title: String, systemImage: String, level: RDMachine.RedactedLevel) -> some View {
+    private func item(_ title: LocalizedStringKey, systemImage: String, level: RDMachine.RedactedLevel) -> some View {
         Button {
             store.machineRedacted = level
         } label: {
@@ -117,7 +125,7 @@ struct RedactionBanner: View {
         HStack(spacing: RX.Space.s2) {
             Image(systemName: "eye.slash")
                 .foregroundStyle(.rxInkSecondary)
-            Text(store.machineRedacted == .all ? "Names and addresses hidden" : "Addresses hidden")
+            Text(store.machineRedacted == .all ? String(localized: "Names and addresses hidden") : String(localized: "Addresses hidden"))
                 .font(.rxBody)
                 .foregroundStyle(.rxInkSecondary)
             Button("Show") { store.machineRedacted = .none }
@@ -310,10 +318,10 @@ private struct ServerRow: View {
     func identityName(_ machine: RDMachine) -> String {
         let user = machine.loginUsername(with: nil)
         guard let aid = machine.associatedIdentity, let uid = UUID(uuidString: aid) else {
-            return user.isEmpty ? "Automatic" : "\(user) · Automatic"
+            return user.isEmpty ? String(localized: "Automatic") : "\(user) · \(String(localized: "Automatic"))"
         }
         let identity = store.identityGroup[uid]
-        guard identity.hasCredentials else { return "Missing" }
+        guard identity.hasCredentials else { return String(localized: "Missing") }
         let credential = identity.isPrivate ? identity.authDescription : identity.displayName
         let login = machine.loginUsername(with: identity)
         return login.isEmpty ? credential : "\(login) · \(credential)"

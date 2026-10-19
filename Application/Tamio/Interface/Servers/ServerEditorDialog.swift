@@ -115,7 +115,7 @@ struct ServerEditorDialog: View {
 
     var header: some View {
         HStack {
-            Text(isNew ? "New Server" : "Edit Server")
+            Text(isNew ? String(localized: "New Server") : String(localized: "Edit Server"))
                 .font(.rxSheetTitle)
             Spacer()
             Button(action: requestClose) {
@@ -123,7 +123,7 @@ struct ServerEditorDialog: View {
             }
             .buttonStyle(.rx(.plain, iconOnly: true))
             .keyboardShortcut(.cancelAction)
-            .help("Close (Esc)")
+            .help(String(localized: "Close (Esc)"))
         }
         .padding(.horizontal, RX.Space.s5)
         .frame(height: 52)
@@ -171,7 +171,7 @@ struct ServerEditorDialog: View {
                         .menuIndicator(.hidden)
                         .buttonStyle(.rx(iconOnly: true))
                         .fixedSize()
-                        .help("Choose an existing group")
+                        .help(String(localized: "Choose an existing group"))
                     }
                 }
             }
@@ -229,11 +229,11 @@ struct ServerEditorDialog: View {
                             options: keys.map { item in
                                 .init(item.id, [item.displayName, item.keyAlgorithm?.uppercased()].compactMap { $0 }.joined(separator: " · "))
                             },
-                            placeholder: keys.isEmpty ? "No keys yet" : "Choose a key"
+                            placeholder: keys.isEmpty ? String(localized: "No keys yet") : String(localized: "Choose a key")
                         )
                         Button("New Key…") { addsKey = true }
                             .buttonStyle(.rx)
-                            .help("Add a key to Identities: paste it, load it or generate one")
+                            .help(String(localized: "Add a key to Identities: paste it, load it or generate one"))
                     }
                 }
                 if let id = draft.key {
@@ -244,7 +244,7 @@ struct ServerEditorDialog: View {
                         if !key.publicKey.isEmpty {
                             Button("Copy Public Key") { Dialogs.sendPasteboard(str: key.publicKey) }
                                 .buttonStyle(.rx(size: .small))
-                                .help("For the server's ~/.ssh/authorized_keys")
+                                .help(String(localized: "For the server's ~/.ssh/authorized_keys"))
                         }
                     }
                 }
@@ -333,18 +333,18 @@ struct ServerEditorDialog: View {
                 .buttonStyle(.rx)
                 .disabled(!canSave || connecting)
                 .keyboardShortcut("s", modifiers: .command)
-                .help("Save without connecting (⌘S)")
+                .help(String(localized: "Save without connecting (⌘S)"))
             Button("Connect", action: connect)
                 .buttonStyle(.rxPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canSave || connecting)
-                .help("Check the connection, save, and open a terminal (↩)")
+                .help(String(localized: "Check the connection, save, and open a terminal (↩)"))
         }
         .padding(.horizontal, RX.Space.s5)
         .frame(height: 56)
     }
 
-    func secretField(placeholder: String) -> some View {
+    func secretField(placeholder: LocalizedStringKey) -> some View {
         HStack(spacing: RX.Space.s1) {
             Group {
                 if showsPassword {
@@ -360,18 +360,18 @@ struct ServerEditorDialog: View {
                 Label(showsPassword ? "Hide" : "Show", systemImage: showsPassword ? "eye.slash" : "eye")
             }
             .buttonStyle(.rx(.plain, iconOnly: true))
-            .help(showsPassword ? "Hide" : "Show")
+            .help(showsPassword ? String(localized: "Hide") : String(localized: "Show"))
         }
     }
 
-    func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+    func section(_ title: LocalizedStringKey, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: RX.Space.s3) {
             CapsLabel(title)
             content()
         }
     }
 
-    func row(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+    func row(_ title: LocalizedStringKey, @ViewBuilder content: () -> some View) -> some View {
         HStack(spacing: RX.Space.s3) {
             Text(title)
                 .font(.rxBody)
@@ -458,9 +458,11 @@ struct ServerEditorDialog: View {
     func credentialsProblem() -> String? {
         switch draft.credential {
         case .password where draft.password.isEmpty:
-            return "Type the password."
+            return String(localized: "Type the password.")
         case .key where draft.key == nil:
-            return keys.isEmpty ? "Add a key with New Key…" : "Choose a key, or add one with New Key…"
+            return keys.isEmpty
+                ? String(localized: "Add a key with New Key…")
+                : String(localized: "Choose a key, or add one with New Key…")
         default:
             return nil
         }
@@ -510,8 +512,8 @@ struct ServerEditorDialog: View {
     func requestClose() {
         guard isDirty else { return close() }
         Dialogs.requiresConfirmation(
-            message: isNew ? "Discard this new server?" : "Discard your changes?",
-            confirmTitle: "Discard",
+            message: isNew ? String(localized: "Discard this new server?") : String(localized: "Discard your changes?"),
+            confirmTitle: String(localized: "Discard"),
             destructive: true,
             always: true
         ) { confirmed in
@@ -547,7 +549,7 @@ struct ServerEditorDialog: View {
                 let proxyFailure = shell.getLastError()
                 onMainThread {
                     connecting = false
-                    addressError = refusal ?? proxyFailure ?? "Could not reach \(host) on port \(port)."
+                    addressError = refusal ?? proxyFailure ?? String(localized: "Could not reach \(host) on port \(port).")
                 }
                 return
             }
@@ -565,8 +567,8 @@ struct ServerEditorDialog: View {
                     }
                 } else {
                     credentialsError = chosen.privateKey.isEmpty
-                        ? "\(username) could not sign in to \(host) with this password."
-                        : "\(host) did not accept this key for \(username). Add its public key to ~/.ssh/authorized_keys there."
+                        ? String(localized: "\(username) could not sign in to \(host) with this password.")
+                        : String(localized: "\(host) did not accept this key for \(username). Add its public key to ~/.ssh/authorized_keys there.")
                 }
             }
         }
