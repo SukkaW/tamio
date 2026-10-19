@@ -13,6 +13,8 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-19
+
 ### Added
 - **Settings sync between your Macs.** Light or dark, the terminal's whole
   configuration (fonts, colours, cursor, keys) and font size, the session
