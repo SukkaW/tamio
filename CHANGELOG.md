@@ -36,7 +36,23 @@ the user. To release, rename that heading to the version and date
   the server. A server whose shell reports its folder by itself needs no
   switch. Browsing elsewhere in Files stays put until the terminal moves.
 
+### Changed
+- **Clouds drift smoothly across the website.** The sky and garden clouds move
+  slowly without stepped motion, and the navigation bar lets more of the page
+  show through as you scroll.
+- **The website's server garden comes to life.** The more detailed pixel scene
+  adds moving characters, flowing data and small moments of garden life.
+  It rests offscreen and follows reduced-motion settings.
+- **The website is easier to explore on every screen.** A new sky-and-garden
+  layout carries through the homepage, missing-page response and link preview.
+  The interactive app window keeps its six servers, inspector views, approvals
+  and activity history, with searchable sample hosts and keyboard controls.
+
 ### Fixed
+- **The garden birds fly more naturally.** Smaller distant silhouettes alternate
+  gentle wingbeats with gliding, with a different rhythm for each bird.
+- **The website opens with a full-height introduction.** The next section's
+  headings stay below the first screen on taller windows.
 - **Terminals open on JumpServer bastions.** A JumpServer (Koko) bastion
   closed the session right after signing in, because Tamio sent the window
   size before asking for a shell and the bastion never answered. The size now
