@@ -193,7 +193,7 @@ enum AgentTools {
             if name == "run_snippet" {
                 command = try snippet(named: a["snippet"]?.string ?? "").code
             }
-            guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AgentToolError(String(localized: "The command is empty.")) }
+            guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AgentToolError("The command is empty.") }
             let sudo = a["sudo"]?.bool ?? false
             let count = machines.count
             let title = count == 1
@@ -214,7 +214,7 @@ enum AgentTools {
             let existing = name == "update_host" ? try server.machine(named: a["host"]?.string ?? "") : nil
             var machine = existing ?? RDMachine(lastConnection: Date(timeIntervalSince1970: 0))
             if existing == nil {
-                guard let address = a["address"]?.string, !address.isEmpty else { throw AgentToolError(String(localized: "address is needed.")) }
+                guard let address = a["address"]?.string, !address.isEmpty else { throw AgentToolError("address is needed.") }
                 machine.remoteAddress = address
                 machine.remotePort = "22"
             }
@@ -291,7 +291,7 @@ enum AgentTools {
                 identity.publicKey = pair.publicKey
             } else {
                 guard let key = a["private_key"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), key.contains("PRIVATE KEY") else {
-                    throw AgentToolError(String(localized: "Give private_key (-----BEGIN … PRIVATE KEY-----) or generate: true."))
+                    throw AgentToolError("Give private_key (-----BEGIN … PRIVATE KEY-----) or generate: true.")
                 }
                 identity.privateKey = key + "\n"
                 identity.publicKey = a["public_key"]?.string ?? ""
@@ -329,7 +329,7 @@ enum AgentTools {
             if let value = a["code"]?.string { snippet.code = value }
             if let value = a["group"]?.string { snippet.group = value }
             if let value = a["comment"]?.string { snippet.comment = value }
-            guard !snippet.name.isEmpty else { throw AgentToolError(String(localized: "name is needed.")) }
+            guard !snippet.name.isEmpty else { throw AgentToolError("name is needed.") }
             let title = name == "add_snippet" ? String(localized: "Save snippet \(snippet.name)") : String(localized: "Change snippet \(snippet.name)")
             try await server.requireApproval(AgentRequest(client: client, tool: name,
                                                           title: title,
@@ -349,7 +349,7 @@ enum AgentTools {
         case "add_port_forward":
             let machine = try server.machine(named: a["host"]?.string ?? "")
             guard let bind = a["bind_port"]?.int, let target = a["target_host"]?.string, let targetPort = a["target_port"]?.int else {
-                throw AgentToolError(String(localized: "bind_port, target_host and target_port are needed."))
+                throw AgentToolError("bind_port, target_host and target_port are needed.")
             }
             var forward = RDPortForward()
             forward.usingMachine = machine.id
@@ -401,7 +401,7 @@ enum AgentTools {
         case "log_activity":
             let machines = try (a["hosts"]?.strings ?? []).map(server.machine(named:))
             guard !machines.isEmpty, let summary = a["summary"]?.string, !summary.isEmpty else {
-                throw AgentToolError(String(localized: "hosts and summary are needed."))
+                throw AgentToolError("hosts and summary are needed.")
             }
             let commands = a["commands"]?.strings ?? []
             let detail = [a["details"]?.string, commands.isEmpty ? nil : commands.map { "$ " + $0 }.joined(separator: "\n")]
@@ -415,7 +415,7 @@ enum AgentTools {
             return ["recorded": .string(entry.id.uuidString)]
 
         default:
-            throw AgentToolError(String(localized: "No tool named \(name)."))
+            throw AgentToolError("No tool named \(name).")
         }
     }
 
@@ -425,7 +425,7 @@ enum AgentTools {
         if let id = UUID(uuidString: reference), let identity = identities.first(where: { $0.id == id }) { return identity }
         let matches = identities.filter { $0.displayName.caseInsensitiveCompare(reference) == .orderedSame }
         if matches.count == 1 { return matches[0] }
-        throw AgentToolError(matches.isEmpty ? String(localized: "No identity named \(reference). list_identities shows them.") : String(localized: "\(matches.count) identities are called \(reference); use its id."))
+        throw AgentToolError(matches.isEmpty ? "No identity named \(reference). list_identities shows them." : "\(matches.count) identities are called \(reference); use its id.")
     }
 
     @MainActor
@@ -434,14 +434,14 @@ enum AgentTools {
         if let id = UUID(uuidString: reference), let snippet = snippets.first(where: { $0.id == id }) { return snippet }
         let matches = snippets.filter { $0.name.caseInsensitiveCompare(reference) == .orderedSame }
         if matches.count == 1 { return matches[0] }
-        throw AgentToolError(matches.isEmpty ? String(localized: "No snippet named \(reference).") : String(localized: "\(matches.count) snippets are called \(reference); use its id."))
+        throw AgentToolError(matches.isEmpty ? "No snippet named \(reference)." : "\(matches.count) snippets are called \(reference); use its id.")
     }
 
     @MainActor
     static func forward(named reference: String) throws -> RDPortForward {
         guard let id = UUID(uuidString: reference),
               let forward = TamioStore.shared.portForwardGroup.forwards.first(where: { $0.id == id })
-        else { throw AgentToolError(String(localized: "No port forward \(reference). list_port_forwards shows them.")) }
+        else { throw AgentToolError("No port forward \(reference). list_port_forwards shows them.") }
         return forward
     }
 
