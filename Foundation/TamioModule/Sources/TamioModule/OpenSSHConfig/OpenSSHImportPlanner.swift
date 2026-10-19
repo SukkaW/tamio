@@ -152,7 +152,7 @@ public enum OpenSSHImportPlanner {
             if existing != nil, sameSource.isEmpty {
                 diagnostics.append(String(localized: "A saved server matches this alias but was not imported from this source. Updating it requires explicit permission."))
             }
-            let hasCredentials = associatedIdentity(machine, identities: identities)?.hasCredentials == true
+            let hasCredentials = machine.signsInWithoutCredentials || associatedIdentity(machine, identities: identities)?.hasCredentials == true
             if !hasCredentials {
                 diagnostics.append(String(localized: "No credential is selected. You may explicitly save this server as a draft and choose credentials before connecting."))
             }

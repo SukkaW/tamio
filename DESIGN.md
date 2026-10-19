@@ -233,9 +233,11 @@ Rayon's data. Importing from Rayon is out of scope for v1.
 >   password identity kept from before), never tied to a user, so one key works
 >   as `root` on one host and `debian` on another.
 > - Credentials are **Password** (kept with this server only, a private identity
->   never listed in Identities) or **SSH key**: choose one from Identities or
+>   never listed in Identities), **SSH key**: choose one from Identities or
 >   **New Key…** to paste, load or **generate an Ed25519** key, which is saved to
->   Identities. There is no "try automatic identities" choice any more.
+>   Identities, or **None**: no password or key, for a server that trusts the
+>   connection itself (Tailscale SSH), signed in with the protocol's `none`
+>   request. There is no "try automatic identities" choice any more.
 > - A private key is **never shown again** once it is in: the field becomes
 >   "•••• ED25519 private key" with only **Replace…**. The public key stays
 >   visible with Copy.

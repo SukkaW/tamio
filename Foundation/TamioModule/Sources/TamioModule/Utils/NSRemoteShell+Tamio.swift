@@ -78,9 +78,32 @@ public extension NSRemoteShell {
         case authenticateFailed
     }
 
-    /// Connects (blocking), then authenticates with `identity` when given,
-    /// otherwise with each of `autoIdentities` in turn. Shared by the
-    /// terminal, file-transfer and monitor bootstraps of both apps.
+    /// Signs a connected shell in the way the server is set to: with no
+    /// credentials when it says so (the protocol's "none" request, which a
+    /// server that trusts the connection itself accepts, Tailscale SSH for
+    /// one), else with `identity`, else with each of `autoIdentities` in
+    /// turn. Returns true when the shell ends up authenticated.
+    @discardableResult
+    func authenticate(
+        for machine: RDMachine,
+        identity: RDIdentity?,
+        autoIdentities: [RDIdentity] = [],
+        hint: ((String) -> Void)? = nil
+    ) -> Bool {
+        if machine.signsInWithoutCredentials {
+            let username = machine.loginUsername(with: nil)
+            hint?("[i] signing in as \(username) with no password or key")
+            authenticateWithoutCredentials(username)
+        } else if let identity {
+            identity.callAuthenticationWith(remote: self, username: machine.loginUsername(with: identity))
+        } else {
+            authenticateWithAutoIdentities(autoIdentities, for: machine, hint: hint)
+        }
+        return isConnected && isAuthenticated
+    }
+
+    /// Connects (blocking), then signs in as `authenticate(for:identity:)`
+    /// does. Shared by the terminal, file-transfer and monitor bootstraps.
     @discardableResult
     func connectAndAuthenticate(
         identity: RDIdentity?,
@@ -91,11 +114,7 @@ public extension NSRemoteShell {
         KnownHosts.install()
         requestConnectAndWait()
         guard isConnected else { return .connectFailed }
-        if let identity {
-            identity.callAuthenticationWith(remote: self, username: machine.loginUsername(with: identity))
-        } else {
-            authenticateWithAutoIdentities(autoIdentities, for: machine, hint: hint)
-        }
-        return isConnected && isAuthenticated ? .success : .authenticateFailed
+        return authenticate(for: machine, identity: identity, autoIdentities: autoIdentities, hint: hint)
+            ? .success : .authenticateFailed
     }
 }

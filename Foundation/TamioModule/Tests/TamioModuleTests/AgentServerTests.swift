@@ -127,6 +127,18 @@ final class AgentServerTests: XCTestCase {
         XCTAssertFalse(AgentHost(RDMachine()).sshConfigBlock.contains("ProxyCommand"))
     }
 
+    func testASignInWithNoCredentialsIsKeptWithTheServer() {
+        var machine = RDMachine(remoteAddress: "ts-host", remotePort: "22", name: "ts")
+        XCTAssertFalse(machine.signsInWithoutCredentials)
+        XCTAssertEqual(AgentHost(machine).auth, "missing", "nothing to sign in with")
+        machine.signsInWithoutCredentials = true
+        XCTAssertEqual(machine.attachment["auth"], "none", "kept with the server, so it syncs like its other settings")
+        XCTAssertEqual(AgentHost(machine).auth, "none")
+        XCTAssertNil(AgentHost(machine).identity)
+        machine.signsInWithoutCredentials = false
+        XCTAssertNil(machine.attachment["auth"])
+    }
+
     func testProxyCommandExpandsPlaceholdersAndReportsFailure() {
         var machine = RDMachine(remoteAddress: "bastion.example.test", remotePort: "2222", name: "bastion")
         machine.proxyCommand = "echo 'tunnel refused for %h:%p (100%%)' >&2; exit 1"

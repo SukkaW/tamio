@@ -253,7 +253,7 @@ private struct ServerRow: View {
                 if columns.showIdentity {
                     Text(identityName(read))
                         .font(.rxBody)
-                        .foregroundStyle(read.associatedIdentity == nil ? Color.rxInkSecondary : Color.rxInk)
+                        .foregroundStyle(read.associatedIdentity == nil && !read.signsInWithoutCredentials ? Color.rxInkSecondary : Color.rxInk)
                         .lineLimit(1)
                         .frame(width: columns.identity, alignment: .leading)
                 }
@@ -317,6 +317,9 @@ private struct ServerRow: View {
 
     func identityName(_ machine: RDMachine) -> String {
         let user = machine.loginUsername(with: nil)
+        if machine.signsInWithoutCredentials {
+            return "\(user) · \(String(localized: "No password or key"))"
+        }
         guard let aid = machine.associatedIdentity, let uid = UUID(uuidString: aid) else {
             return user.isEmpty ? String(localized: "Automatic") : "\(user) · \(String(localized: "Automatic"))"
         }

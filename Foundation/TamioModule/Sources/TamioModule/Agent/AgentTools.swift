@@ -107,6 +107,7 @@ enum AgentTools {
         "comment": string,
         "identity": describe(string, "Id or name of an SSH key identity to sign in with"),
         "password": describe(string, "Password to sign in with, kept with this server. Write-only: never returned"),
+        "auth": describe(string, "\"none\": sign in with no password or key, for a server that trusts the connection itself, such as Tailscale SSH. Otherwise give identity or password"),
         "proxy_command": describe(string, "A command the connection goes through instead of a direct TCP connection, as in ssh_config ProxyCommand. %h is the address and %p the port, e.g. \"cloudflared access ssh --hostname %h\". Empty connects directly"),
     ]
 
@@ -136,7 +137,7 @@ enum AgentTools {
         tool("run_command", "Run a shell command on servers, signed in with Tamio's saved credentials. The user approves first. Returns each server's exit code and output.",
              schema(["targets": targets, "command": string, "sudo": describe(boolean, "Run with sudo -n"), "timeout": describe(integer, "Seconds per server, 300 by default"), "concurrency": describe(integer, "Servers at once, 8 by default")], required: ["targets", "command"]), readOnly: false),
         tool("run_snippet", "Run a saved snippet on servers, like run_command.", schema(["targets": targets, "snippet": describe(string, "Snippet id or name"), "sudo": boolean, "timeout": integer], required: ["targets", "snippet"]), readOnly: false),
-        tool("add_host", "Add a server. Sign-in is a key identity, or a password kept with the server.", schema(hostFields, required: ["address"]), readOnly: false),
+        tool("add_host", "Add a server. Sign-in is a key identity, a password kept with the server, or none (auth: \"none\") for a server that trusts the connection itself.", schema(hostFields, required: ["address"]), readOnly: false),
         tool("update_host", "Change a server; only the fields given change.", schema(hostFields.merging(["host": describe(string, "Id, name or address of the server")]) { $1 }, required: ["host"]), readOnly: false),
         tool("remove_host", "Remove a server from Tamio.", schema(["host": string], required: ["host"]), readOnly: false),
         tool("list_identities", "SSH key identities: name, key type, public key, the servers using them. Private keys are never returned.", schema([:]), readOnly: true),
@@ -228,6 +229,17 @@ enum AgentTools {
             if a["tags"] != nil { machine.tags = a["tags"]?.strings ?? [] }
             if let value = a["comment"]?.string { machine.comment = value }
             if let value = a["proxy_command"]?.string { machine.proxyCommand = value }
+            // auth takes one value, "none"; a key or a password comes as
+            // identity or password instead.
+            let withoutCredentials: Bool
+            switch a["auth"]?.string {
+            case nil, "": withoutCredentials = false
+            case "none": withoutCredentials = true
+            default: throw AgentToolError("auth can only be \"none\"; give identity or password to sign in with one.")
+            }
+            if withoutCredentials, a["identity"] != nil || a["password"] != nil {
+                throw AgentToolError("auth: none takes no identity or password.")
+            }
             var identity: RDIdentity?
             if let reference = a["identity"]?.string, !reference.isEmpty {
                 identity = try self.identity(named: reference)
@@ -247,6 +259,7 @@ enum AgentTools {
                 machine.tags.isEmpty ? nil : "tags \(machine.tags.joined(separator: ", "))",
                 a["identity"]?.string.map { "key \($0)" },
                 a["password"] != nil ? "a password (hidden)" : nil,
+                withoutCredentials ? "no password or key" : nil,
                 machine.proxyCommand.isEmpty ? nil : "proxy command \(machine.proxyCommand)",
             ].compactMap { $0 }.joined(separator: "\n")
             try await server.requireApproval(AgentRequest(
@@ -254,12 +267,19 @@ enum AgentTools {
                 title: existing == nil ? String(localized: "Add server \(machine.name)") : String(localized: "Change server \(existing!.name)"),
                 detail: changes, hosts: [machine.name], hostIDs: [machine.id.uuidString]
             ))
-            if let identity {
+            if withoutCredentials {
+                if let previous = existing.flatMap({ store.associatedIdentity(for: $0) }), previous.isPrivate {
+                    store.identityGroup.delete(previous.id)
+                }
+                machine.associatedIdentity = nil
+                machine.signsInWithoutCredentials = true
+            } else if let identity {
                 if identity.isPrivate { store.identityGroup.insert(identity) }
                 if let previous = existing.flatMap({ store.associatedIdentity(for: $0) }), previous.isPrivate, previous.id != identity.id {
                     store.identityGroup.delete(previous.id)
                 }
                 machine.associatedIdentity = identity.id.uuidString
+                machine.signsInWithoutCredentials = false
             }
             store.machineGroup.insert(machine)
             return .from(AgentHost(store.machineGroup[machine.id]))

@@ -221,7 +221,7 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
         }
 
         let identity: RDIdentity?
-        if machine.associatedIdentity != nil {
+        if machine.associatedIdentity != nil, !machine.signsInWithoutCredentials {
             guard let resolved = TamioStore.shared.workerAssociatedIdentity(for: machine) else {
                 putInformation(String(localized: "Malformed machine or identity data"))
                 return
@@ -251,8 +251,15 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
             }
             return
         case .authenticateFailed:
-            putInformation(String(localized: "Failed to authenticate connection"))
-            putInformation(String(localized: "Did you forget to add identity or enable auto authentication?"))
+            if machine.signsInWithoutCredentials {
+                putInformation(String(localized: "The server did not let \(machine.loginUsername(with: nil)) in without a password or key."))
+                if let wanted = shell.getLastError() {
+                    putInformation(wanted)
+                }
+            } else {
+                putInformation(String(localized: "Failed to authenticate connection"))
+                putInformation(String(localized: "Did you forget to add identity or enable auto authentication?"))
+            }
             return
         }
 

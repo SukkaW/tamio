@@ -125,6 +125,14 @@ public struct RDMachine: Codable, Identifiable, Equatable, Sendable {
         set { attachment["shell.integration"] = newValue ? "1" : nil }
     }
 
+    /// The server signs in with no password or key: the connection itself is
+    /// its credential, as with Tailscale SSH, so the protocol's "none" request
+    /// is enough. Its identity, if it still has one, goes unused.
+    public var signsInWithoutCredentials: Bool {
+        get { attachment["auth"] == "none" }
+        set { attachment["auth"] = newValue ? "none" : nil }
+    }
+
     // convince
 
     public func isQualifiedForSearch(text: String) -> Bool {

@@ -67,6 +67,10 @@ typedef BOOL (^NSRemoteShellHostKeyVerifier)(NSString *host, NSNumber *port, NSS
             andPublicKey:(nullable NSString *)publicKey
            andPrivateKey:(NSString *)privateKey
              andPassword:(nullable NSString *)password;
+/// The protocol's "none" method: a sign-in with no credential, which a server
+/// that trusts the connection itself (Tailscale SSH) accepts. One that wants
+/// credentials refuses, and getLastError says which it takes.
+- (void)authenticateWithoutCredentials:(NSString *)username;
 
 #pragma mark helper
 

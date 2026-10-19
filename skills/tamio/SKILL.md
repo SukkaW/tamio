@@ -47,7 +47,9 @@ Tamio must be running with **Settings › MCP › MCP server** on (it is by defa
    passphrases. To give a server a key, call `add_identity` with
    `generate: true`; it returns the public key — install it in the server's
    `~/.ssh/authorized_keys` (for example with `run_command` on a server you can
-   already reach), then `update_host` with `identity`.
+   already reach), then `update_host` with `identity`. A server that trusts
+   the connection itself, as Tailscale SSH does, needs neither: `update_host`
+   with `"auth": "none"`.
 6. **Every change is approved by the user.** `run_*`, `add_*`, `update_*`,
    `remove_*`, `start_*`/`stop_*` wait for them. Say what you are about to do
    and why before calling one; if they decline, ask rather than retry.
@@ -58,12 +60,12 @@ Tamio must be running with **Settings › MCP › MCP server** on (it is by defa
 
 | Tool | What it does |
 |---|---|
-| `list_hosts` | Servers (filter by `query`, `group`, `tag`) |
+| `list_hosts` | Servers (filter by `query`, `group`, `tag`); `auth` is `key`, `password`, `none` (signs in with neither) or `missing` (Tamio has nothing to sign in with) |
 | `get_host` | One server, with live status |
 | `get_metrics` | Live CPU, memory, disk, load, network, traffic, OS |
 | `export_ssh_config` | `Host` blocks, no keys |
 | `run_command` / `run_snippet` | Run on servers; exit code and output per server |
-| `add_host` / `update_host` / `remove_host` | Manage servers (`password` is write-only; `proxy_command` sets an `ssh_config` `ProxyCommand`) |
+| `add_host` / `update_host` / `remove_host` | Manage servers (`password` is write-only; `"auth": "none"` signs in with no password or key; `proxy_command` sets an `ssh_config` `ProxyCommand`) |
 | `list_identities` / `add_identity` / `remove_identity` | SSH keys; public keys only |
 | `list_snippets` / `add_snippet` / `update_snippet` / `remove_snippet` | Saved commands |
 | `list_port_forwards` / `add_port_forward` / `start_port_forward` / `stop_port_forward` / `remove_port_forward` | Tunnels through a server |

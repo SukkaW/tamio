@@ -301,6 +301,20 @@ continue; \
     MakeDispatchSemaphoreWaitWithTimeout(sem)
 }
 
+- (void)authenticateWithoutCredentials:(NSString*)username {
+    if (self.destroyed) return;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    @synchronized (self.requestInvokations) {
+        id block = [^{
+            [self unsafeAuthenticateWithoutCredentials:username];
+            DISPATCH_SEMAPHORE_CHECK_SIGNLE(sem);
+        } copy];
+        [self.requestInvokations addObject:block];
+    }
+    [self.associatedLoop explicitRequestHandle];
+    MakeDispatchSemaphoreWaitWithTimeout(sem)
+}
+
 #pragma exec
 
 - (int)beginExecuteWithCommand:(NSString*)withCommand
@@ -974,6 +988,50 @@ continue; \
     if (authenticated) {
         self.authenticated = YES;
         NSRLog(@"authenticate success");
+    }
+}
+
+// libssh2 sends the "none" request to ask which methods the server takes; a
+// server that takes "none" itself answers with success instead of a list.
+- (void)unsafeAuthenticateWithoutCredentials:(NSString*)username {
+    if (![self unsafeValidateSession]) {
+        [self unsafeDisconnect];
+        return;
+    }
+    if (self.authenticated) {
+        return;
+    }
+    LIBSSH2_SESSION *session = self.associatedSession;
+    BOOL authenticated = NO;
+    NSString *methods = nil;
+    const char *name = username ? [username UTF8String] : "";
+    NSDate *date = [[NSDate alloc] initWithTimeIntervalSinceNow:[self.operationTimeout intValue]];
+    while (true) {
+        if ([date timeIntervalSinceNow] < 0) {
+            libssh2_session_set_last_error(session, LIBSSH2_ERROR_TIMEOUT, NULL);
+            break;
+        }
+        char *list = libssh2_userauth_list(session, name, (unsigned int)strlen(name));
+        if (list == NULL && libssh2_session_last_errno(session) == LIBSSH2_ERROR_EAGAIN) {
+            usleep(LIBSSH2_CONTINUE_EAGAIN_WAIT);
+            continue;
+        }
+        authenticated = libssh2_userauth_authenticated(session) != 0;
+        if (list != NULL) {
+            methods = [[NSString alloc] initWithUTF8String:list];
+        }
+        break;
+    }
+    [self unsafeReadLastError];
+    if (authenticated) {
+        self.authenticated = YES;
+        NSRLog(@"authenticate success");
+    } else if (methods.length > 0) {
+        // The list is the refusal: the server wants one of these instead.
+        @synchronized (self) {
+            self.lastError = [NSString stringWithFormat:@"The server wants credentials for %@: %@.",
+                              username ?: @"", [methods stringByReplacingOccurrencesOfString:@"," withString:@", "]];
+        }
     }
 }
 

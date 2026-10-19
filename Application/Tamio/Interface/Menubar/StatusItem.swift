@@ -23,7 +23,8 @@ class MenubarStatusItem: NSObject, Identifiable {
     nonisolated var key: String { id.uuidString }
 
     let machine: RDMachine
-    let identity: RDIdentity
+    /// Nil for a server that signs in with no password or key.
+    let identity: RDIdentity?
     let session: MonitorSession
     let item: MacStatusItem
 
@@ -32,7 +33,7 @@ class MenubarStatusItem: NSObject, Identifiable {
     static let frames = (0 ... 4).map { "cat_frame_\($0)" }
     static let crashFrame = "cat_frame_crash"
 
-    init(machine: RDMachine, identity: RDIdentity, session: MonitorSession? = nil) {
+    init(machine: RDMachine, identity: RDIdentity?, session: MonitorSession? = nil) {
         self.machine = machine
         self.identity = identity
         self.session = session ?? MonitorSession(machine: machine, identity: identity)

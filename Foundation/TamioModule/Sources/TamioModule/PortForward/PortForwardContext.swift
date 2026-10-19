@@ -120,11 +120,12 @@ public class PortForwardContext: ObservableObject, Identifiable {
             putLifecycle(.failedConnect)
             return
         }
-        guard let identity = TamioStore.shared.workerAssociatedIdentity(for: machine) else {
+        let identity = TamioStore.shared.workerAssociatedIdentity(for: machine)
+        guard identity != nil || machine.signsInWithoutCredentials else {
             putLifecycle(.failedAuthenticate)
             return
         }
-        identity.callAuthenticationWith(remote: shell, username: machine.loginUsername(with: identity))
+        shell.authenticate(for: machine, identity: identity)
         guard shell.isAuthenticated else {
             putLifecycle(.failedAuthenticate)
             return

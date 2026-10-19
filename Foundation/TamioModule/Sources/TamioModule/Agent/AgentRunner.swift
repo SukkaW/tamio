@@ -79,7 +79,7 @@ enum AgentRunner {
                     shell.requestDisconnectAndWait()
                     shell.destroyPermanently()
                 }
-                guard let identity else {
+                guard identity != nil || machine.signsInWithoutCredentials else {
                     result.error = "This server has no password or key in Tamio."
                     return continuation.resume(returning: result)
                 }
@@ -88,9 +88,12 @@ enum AgentRunner {
                     result.error = shell.hostKeyRefusal ?? shell.getLastError() ?? "Could not reach \(machine.remoteAddress):\(machine.remotePort)."
                     return continuation.resume(returning: result)
                 }
-                identity.callAuthenticationWith(remote: shell, username: machine.loginUsername(with: identity))
+                shell.authenticate(for: machine, identity: identity)
                 guard shell.isAuthenticated else {
-                    result.error = "Could not sign in as \(machine.loginUsername(with: identity))."
+                    // A server set to take no credentials says what it wants instead.
+                    let username = machine.loginUsername(with: identity)
+                    result.error = ["Could not sign in as \(username).", machine.signsInWithoutCredentials ? shell.getLastError() : nil]
+                        .compactMap { $0 }.joined(separator: " ")
                     return continuation.resume(returning: result)
                 }
                 let lock = NSLock()

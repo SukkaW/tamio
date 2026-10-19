@@ -19,7 +19,9 @@ public struct AgentHost: Codable, Equatable, Sendable {
     public var group: String
     public var tags: [String]
     public var comment: String
-    /// "key", "password" or "none".
+    /// "key", "password", "none" for a server that signs in with no password
+    /// or key (the connection itself is its credential), or "missing" when
+    /// Tamio has nothing to sign in with.
     public var auth: String
     /// The shared identity's name ("Deploy key"), nil for a password kept with the server.
     public var identity: String?
@@ -41,12 +43,16 @@ public struct AgentHost: Codable, Equatable, Sendable {
         group = machine.group
         tags = machine.tags
         comment = machine.comment
-        if let identity {
+        if machine.signsInWithoutCredentials {
+            auth = "none"
+            self.identity = nil
+            keyType = nil
+        } else if let identity {
             auth = identity.privateKey.isEmpty ? "password" : "key"
             self.identity = identity.isPrivate ? nil : identity.displayName
             keyType = identity.keyAlgorithm
         } else {
-            auth = "none"
+            auth = "missing"
             self.identity = nil
             keyType = nil
         }

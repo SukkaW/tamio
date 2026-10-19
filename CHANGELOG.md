@@ -14,6 +14,14 @@ the user. To release, rename that heading to the version and date
 ## [Unreleased]
 
 ### Added
+- **A server can sign in with no password or key.** Credentials in New or
+  Edit Server has a third choice, None, for a server that trusts the
+  connection itself, as Tailscale SSH does: Tamio asks to sign in with
+  nothing, and the server lets the user in. Terminals, Files, live status,
+  snippets, port forwards, the menu bar and agents all sign in that way; a
+  server that wants credentials after all says which. Agents set it with
+  `"auth": "none"` in add_host or update_host; list_hosts shows `none` for
+  such a server and `missing` for one Tamio has nothing to sign in with.
 - **Import servers from OpenSSH configuration.** Servers › Import previews
   concrete Host aliases with their effective address, user, port, credentials,
   source location and compatibility warnings. Includes and defaults are

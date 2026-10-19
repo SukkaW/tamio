@@ -1889,6 +1889,22 @@
         }
       }
     },
+    "%@ did not let %@ in without a password or key.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ did not let %2$@ in without a password or key."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 未允许 %2$@ 在没有密码或密钥的情况下登录。"
+          }
+        }
+      }
+    },
     "%@ did not accept this key for %@. Add its public key to ~/.ssh/authorized_keys there.": {
       "localizations": {
         "en": {
@@ -18142,6 +18158,22 @@
         }
       }
     },
+    "No password or key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No password or key"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无密码或密钥"
+          }
+        }
+      }
+    },
     "No credentials": {
       "localizations": {
         "en": {
@@ -19098,6 +19130,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示智能体在某台服务器或所有服务器上做过的事。"
+          }
+        }
+      }
+    },
+    "Signs in as %@ with no password or key, for a server that trusts the connection itself, such as Tailscale SSH.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signs in as %@ with no password or key, for a server that trusts the connection itself, such as Tailscale SSH."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以 %@ 身份登录，不需要密码或密钥：用于由连接本身完成验证的服务器，例如 Tailscale SSH。"
           }
         }
       }

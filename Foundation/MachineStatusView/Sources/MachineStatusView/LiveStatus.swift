@@ -37,6 +37,7 @@ public final class LiveStatusCenter: ObservableObject {
         let username: String
         let identity: String?
         let secret: String
+        let withoutCredentials: Bool
 
         init(_ machine: RDMachine, _ identity: RDIdentity?) {
             address = machine.remoteAddress
@@ -44,6 +45,7 @@ public final class LiveStatusCenter: ObservableObject {
             username = machine.loginUsername(with: identity)
             self.identity = machine.associatedIdentity
             secret = (identity?.password ?? "") + (identity?.privateKey ?? "")
+            withoutCredentials = machine.signsInWithoutCredentials
         }
     }
 
@@ -68,9 +70,10 @@ public final class LiveStatusCenter: ObservableObject {
         MonitorCenter.shared.session(for: machine) ?? sessions[machine]
     }
 
-    /// Whether a server can be followed: it has a password or key to sign in with.
+    /// Whether a server can be followed: it has a password or key to sign in
+    /// with, or signs in with neither.
     public static func canFollow(_ machine: RDMachine) -> Bool {
-        machine.isNotPlaceholder() && TamioStore.shared.associatedIdentity(for: machine) != nil
+        machine.isNotPlaceholder() && (machine.signsInWithoutCredentials || TamioStore.shared.associatedIdentity(for: machine) != nil)
     }
 
     func sync() {

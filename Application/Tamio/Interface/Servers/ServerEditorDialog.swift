@@ -4,9 +4,10 @@
 //
 //  New / Edit Server, a dialog over the window: Address; General (Label,
 //  Group, Tags); SSH user and port; Credentials: a password for this server,
-//  or an SSH key from Identities (or a new one, added there); Advanced (SFTP
-//  start folder, startup snippet, comment, last banner). A password is kept
-//  as the server's private identity, never listed in Identities.
+//  an SSH key from Identities (or a new one, added there), or none, for a
+//  server that trusts the connection itself; Advanced (SFTP start folder,
+//  startup snippet, comment, last banner). A password is kept as the
+//  server's private identity, never listed in Identities.
 //
 
 import NSRemoteShell
@@ -20,6 +21,9 @@ struct ServerDraft: Equatable {
     enum Credential: Hashable {
         case password
         case key
+        /// No password or key: the server lets the user in on the connection
+        /// alone, as Tailscale SSH does.
+        case none
     }
 
     var address = ""
@@ -214,8 +218,11 @@ struct ServerEditorDialog: View {
             RXSegmented(selection: $draft.credential, options: [
                 .init(.password, "Password"),
                 .init(.key, "SSH key"),
+                .init(.none, "None"),
             ], caps: false, fullWidth: true)
             switch draft.credential {
+            case .none:
+                HelpText("Signs in as \(trimmedUsername) with no password or key, for a server that trusts the connection itself, such as Tailscale SSH.")
             case .password:
                 row("Password") {
                     secretField(placeholder: "Required")
@@ -413,6 +420,10 @@ struct ServerEditorDialog: View {
         let identity = read.associatedIdentity.flatMap(UUID.init(uuidString:)).map { store.identityGroup[$0] }
         let user = read.loginUsername(with: identity)
         draft.username = user == RDMachine.defaultUsername && read.username.isEmpty ? "" : user
+        if read.signsInWithoutCredentials {
+            draft.credential = .none
+            return
+        }
         guard let identity, identity.hasCredentials else { return }
         if identity.privateKey.isEmpty {
             // A password: the server's own, or a password identity from
@@ -436,9 +447,11 @@ struct ServerEditorDialog: View {
     }
 
     /// What the server signs in with: its own password, kept as a private
-    /// identity, or a key from Identities.
+    /// identity, or a key from Identities; nil for None.
     func credentialsToUse() -> RDIdentity? {
         switch draft.credential {
+        case .none:
+            return nil
         case .key:
             return draft.key.map { store.identityGroup[$0] }
         case .password:
@@ -493,6 +506,7 @@ struct ServerEditorDialog: View {
             store.identityGroup.delete(previousPrivate.id)
         }
         target.associatedIdentity = identity?.id.uuidString
+        target.signsInWithoutCredentials = draft.credential == .none
 
         if let capturedBanner {
             target.lastBanner = capturedBanner
@@ -538,7 +552,8 @@ struct ServerEditorDialog: View {
         let port = draft.port
         let username = trimmedUsername
         let proxyCommand = draft.proxyCommand
-        guard let chosen = credentialsToUse() else { return }
+        // Nil only for None: credentialsProblem() has checked the others.
+        let chosen = credentialsToUse()
         let timeout = store.timeoutNumber
         DispatchQueue.global().async {
             let shell = NSRemoteShell.configured(host: host, port: port, timeout: timeout)
@@ -553,8 +568,14 @@ struct ServerEditorDialog: View {
                 }
                 return
             }
-            chosen.callAuthenticationWith(remote: shell, username: username)
+            if let chosen {
+                chosen.callAuthenticationWith(remote: shell, username: username)
+            } else {
+                shell.authenticateWithoutCredentials(username)
+            }
             let authenticated = shell.isAuthenticated
+            // What the server wants instead, when it would not take nothing.
+            let wanted = authenticated ? nil : shell.getLastError()
             let banner = shell.remoteBanner ?? ""
             shell.requestDisconnectAndWait()
             onMainThread {
@@ -565,10 +586,13 @@ struct ServerEditorDialog: View {
                     onMainThread(delay: 0.2) {
                         AppRouter.shared.openTerminal(machine: created.id)
                     }
-                } else {
+                } else if let chosen {
                     credentialsError = chosen.privateKey.isEmpty
                         ? String(localized: "\(username) could not sign in to \(host) with this password.")
                         : String(localized: "\(host) did not accept this key for \(username). Add its public key to ~/.ssh/authorized_keys there.")
+                } else {
+                    credentialsError = [String(localized: "\(host) did not let \(username) in without a password or key."), wanted]
+                        .compactMap { $0 }.joined(separator: " ")
                 }
             }
         }

@@ -48,19 +48,20 @@ class MenubarTool {
 
     struct ArgumentCompiler: Codable {
         let machine: RDMachine.ID
-        let identity: RDIdentity.ID
+        /// Nil for a server that signs in with no password or key.
+        let identity: RDIdentity.ID?
 
-        init(machine: RDMachine.ID, identity: RDIdentity.ID) {
+        init(machine: RDMachine.ID, identity: RDIdentity.ID?) {
             self.machine = machine
             self.identity = identity
         }
 
         @MainActor func createStatusItem() -> MenubarStatusItem? {
             let machine = TamioStore.shared.machineGroup[machine]
-            let identity = TamioStore.shared.identityGroup[identity]
+            let identity = self.identity.map { TamioStore.shared.identityGroup[$0] }
             // Callers validate these invariants and present errors already;
             // degrade gracefully instead of crashing the whole app.
-            guard machine.isNotPlaceholder(), identity.hasCredentials else {
+            guard machine.isNotPlaceholder(), machine.signsInWithoutCredentials || identity?.hasCredentials == true else {
                 debugPrint("failed to create status item: malformed machine or identity")
                 return nil
             }
@@ -86,15 +87,21 @@ class MenubarTool {
             fail(String(localized: "Could not add the server to the menu bar: its details are missing"))
             return
         }
-        guard machine.associatedIdentity != nil else {
-            fail(String(localized: "To show a server in the menu bar, choose an identity for it first (Edit Server › Identity)"))
-            return
+        let identity: RDIdentity?
+        if machine.signsInWithoutCredentials {
+            identity = nil
+        } else {
+            guard machine.associatedIdentity != nil else {
+                fail(String(localized: "To show a server in the menu bar, choose an identity for it first (Edit Server › Identity)"))
+                return
+            }
+            guard let resolved = TamioStore.shared.associatedIdentity(for: machine) else {
+                fail(String(localized: "Could not add the server to the menu bar: its identity is missing"))
+                return
+            }
+            identity = resolved
         }
-        guard let identity = TamioStore.shared.associatedIdentity(for: machine) else {
-            fail(String(localized: "Could not add the server to the menu bar: its identity is missing"))
-            return
-        }
-        let compiler = ArgumentCompiler(machine: machine.id, identity: identity.id)
+        let compiler = ArgumentCompiler(machine: machine.id, identity: identity?.id)
         guard let item = compiler.createStatusItem() else {
             return
         }
