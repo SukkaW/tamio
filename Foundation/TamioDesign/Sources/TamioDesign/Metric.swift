@@ -54,6 +54,7 @@ public struct LabeledMetric: View {
         self.swatch = swatch
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ label: S, value: String, unit: String = "", swatch: Color? = nil) {
         self.label = CapsLabel(label)
         self.value = value

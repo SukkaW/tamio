@@ -161,6 +161,7 @@ public struct RXIconButton: View {
         self.action = action
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,
         systemImage: String,
@@ -211,6 +212,7 @@ public struct RXSegmented<Value: Hashable>: View {
             self.systemImage = systemImage
         }
 
+        @_disfavoredOverload
         public init<S: StringProtocol>(_ value: Value, _ title: S, systemImage: String? = nil) {
             self.value = value
             self.title = Text(verbatim: String(title))
@@ -376,30 +378,21 @@ public struct RXField<Content: View>: View {
     let error: HelpText?
     let content: Content
 
-    public init(_ label: LocalizedStringKey, help: LocalizedStringKey? = nil, error: LocalizedStringKey? = nil, @ViewBuilder content: () -> Content) {
+    /// `error` is shown as given: it is worked out in code, often from the
+    /// value typed.
+    public init(_ label: LocalizedStringKey, help: LocalizedStringKey? = nil, error: String? = nil, @ViewBuilder content: () -> Content) {
         self.label = CapsLabel(label)
         self.help = help.map { HelpText($0) }
-        self.error = error.map { HelpText($0, isError: true) }
-        self.content = content()
-    }
-
-    public init<H: StringProtocol>(_ label: LocalizedStringKey, help: H?, error: String? = nil, @ViewBuilder content: () -> Content) {
-        self.label = CapsLabel(label)
-        self.help = help.flatMap { $0.isEmpty ? nil : HelpText($0) }
         self.error = error.flatMap { $0.isEmpty ? nil : HelpText($0, isError: true) }
         self.content = content()
     }
 
-    public init<E: StringProtocol>(_ label: LocalizedStringKey, error: E?, @ViewBuilder content: () -> Content) {
-        self.label = CapsLabel(label)
-        self.help = nil
-        self.error = error.flatMap { $0.isEmpty ? nil : HelpText($0, isError: true) }
-        self.content = content()
-    }
 
-    public init<S: StringProtocol>(_ label: S, help: String? = nil, error: String? = nil, @ViewBuilder content: () -> Content) {
+
+    @_disfavoredOverload
+    public init<S: StringProtocol>(_ label: S, help: LocalizedStringKey? = nil, error: String? = nil, @ViewBuilder content: () -> Content) {
         self.label = CapsLabel(label)
-        self.help = help.flatMap { $0.isEmpty ? nil : HelpText($0) }
+        self.help = help.map { HelpText($0) }
         self.error = error.flatMap { $0.isEmpty ? nil : HelpText($0, isError: true) }
         self.content = content()
     }
@@ -430,6 +423,7 @@ public struct RXValueField: View {
         self.monospaced = monospaced
     }
 
+    @_disfavoredOverload
     public init<P: StringProtocol>(_ text: String, placeholder: P, monospaced: Bool = false) {
         self.text = text
         self.placeholder = Text(verbatim: String(placeholder))
@@ -465,6 +459,7 @@ public struct RXSearchField: View {
         self.width = width
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ prompt: S, text: Binding<String>, width: CGFloat? = 220) {
         self.prompt = Text(verbatim: String(prompt))
         _text = text
@@ -539,6 +534,7 @@ public struct RXPicker<Value: Hashable>: View {
             self.title = Text(title)
         }
 
+        @_disfavoredOverload
         public init<S: StringProtocol>(_ value: Value, _ title: S) {
             self.value = value
             self.title = Text(verbatim: String(title))
@@ -555,6 +551,7 @@ public struct RXPicker<Value: Hashable>: View {
         self.placeholder = Text(placeholder)
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(selection: Binding<Value>, options: [Option], placeholder: S) {
         _selection = selection
         self.options = options

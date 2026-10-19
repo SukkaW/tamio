@@ -22,12 +22,7 @@ public struct CloudSyncSettings: View {
 
     public var body: some View {
         RXDividedStack {
-            RXFormRow("Sync with iCloud", description: (sync.isOn ? nil : sync.problem) ?? String(localized: """
-            On unless you turn it off, so your servers and what agents did on them are never lost \
-            with a Mac. Everything is encrypted on this device before it goes to iCloud, under a \
-            passphrase kept in your iCloud Keychain, so your other Macs sync by themselves. Apple \
-            cannot read it.
-            """)) {
+            RXFormRow("Sync with iCloud", description: "\(syncDescription)") {
                 Toggle("Sync with iCloud", isOn: Binding(
                     get: { sync.isOn },
                     set: { on in
@@ -47,7 +42,7 @@ public struct CloudSyncSettings: View {
                     .disabled(sync.problem != nil && !sync.isOn)
             }
             if sync.isOn {
-                RXFormRow("Status", description: statusText) {
+                RXFormRow("Status", description: "\(statusText)") {
                     HStack(spacing: RX.Space.s2) {
                         switch sync.status {
                         case .locked:
@@ -90,8 +85,8 @@ public struct CloudSyncSettings: View {
                     description: "What agents did on each server, so agents on other devices know.",
                     isOn: $sync.syncsActivity
                 )
-                RXFormRow("Passphrase", description: shown.map { String(localized: "\($0) — type it on a device without iCloud Keychain.") }
-                    ?? String(localized: "Your other devices take it from iCloud Keychain, or ask for it."))
+                RXFormRow("Passphrase", description: shown.map { "\($0) — type it on a device without iCloud Keychain." }
+                    ?? "Your other devices take it from iCloud Keychain, or ask for it.")
                 {
                     HStack(spacing: RX.Space.s2) {
                         if let passphrase = sync.currentPassphrase {
@@ -131,6 +126,15 @@ public struct CloudSyncSettings: View {
             its own again, so turn sync off there too.
             """)
         }
+    }
+
+    private var syncDescription: String {
+        (sync.isOn ? nil : sync.problem) ?? String(localized: """
+        On unless you turn it off, so your servers and what agents did on them are never lost \
+        with a Mac. Everything is encrypted on this device before it goes to iCloud, under a \
+        passphrase kept in your iCloud Keychain, so your other Macs sync by themselves. Apple \
+        cannot read it.
+        """)
     }
 
     private var statusText: String {
@@ -217,7 +221,7 @@ private struct PassphraseSheet: View {
     }
 
     var body: some View {
-        SheetScaffold(title, lead: lead) {
+        SheetScaffold(title, lead: "\(lead)") {
             VStack(alignment: .leading, spacing: RX.Space.s4) {
                 RXField("Passphrase", error: chooses ? nil : problem) {
                     SecureField("", text: $passphrase)

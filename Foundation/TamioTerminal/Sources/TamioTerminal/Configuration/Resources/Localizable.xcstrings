@@ -17,6 +17,12 @@
         }
       }
     },
+    "%@": {
+      "shouldTranslate": false
+    },
+    "%@ %@": {
+      "shouldTranslate": false
+    },
     "%@%@": {
       "localizations": {
         "en": {
@@ -97,6 +103,22 @@
         }
       }
     },
+    "Choose a category": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a category"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择一个类别"
+          }
+        }
+      }
+    },
     "Choose a font installed on this Mac": {
       "localizations": {
         "en": {
@@ -125,6 +147,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "自定义"
+          }
+        }
+      }
+    },
+    "Dark": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "深色"
           }
         }
       }
@@ -193,6 +231,38 @@
         }
       }
     },
+    "Light": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浅色"
+          }
+        }
+      }
+    },
+    "Link: use one value for both": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link: use one value for both"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "联动：两者使用同一个值"
+          }
+        }
+      }
+    },
     "Preview": {
       "localizations": {
         "en": {
@@ -205,6 +275,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "预览"
+          }
+        }
+      }
+    },
+    "Search Results": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search Results"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索结果"
+          }
+        }
+      }
+    },
+    "Search fonts": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search fonts"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索字体"
           }
         }
       }
@@ -285,6 +387,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "单位"
+          }
+        }
+      }
+    },
+    "Unlink: set %@ and %@ separately": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlink: set %@ and %@ separately"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消联动：分别设置 %@ 和 %@"
           }
         }
       }

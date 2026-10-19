@@ -78,6 +78,7 @@ public struct RXTag: View {
         self.style = style
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ text: S, systemImage: String? = nil, style: Style = .neutral) {
         self.text = Text(verbatim: String(text))
         self.systemImage = systemImage

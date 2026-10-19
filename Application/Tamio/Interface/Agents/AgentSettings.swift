@@ -51,7 +51,7 @@ struct AgentSetupSettings: View {
         RXDividedStack {
             copyRow("Claude Code", description: "Run once in Terminal.", text: bridge.claudeCommand)
             copyRow("Codex", description: "Add to ~/.codex/config.toml.", text: bridge.codexConfig)
-            RXFormRow("Tamio skill", description: installed ?? String(localized: "Teaches an agent the rules: read a server's activity first, run through Tamio, report what it does by other means.")) {
+            RXFormRow("Tamio skill", description: installed.map { "\($0)" } ?? "Teaches an agent the rules: read a server's activity first, run through Tamio, report what it does by other means.") {
                 HStack(spacing: RX.Space.s2) {
                     Button("Copy Command") { Dialogs.sendPasteboard(str: bridge.skillInstallCommand) }
                         .buttonStyle(.rx)

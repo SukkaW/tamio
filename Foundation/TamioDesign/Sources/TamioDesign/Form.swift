@@ -56,13 +56,8 @@ public struct RXFormRow<Control: View>: View {
         self.control = control()
     }
 
-    public init<D: StringProtocol>(_ title: LocalizedStringKey, description: D?, alignTop: Bool = false, @ViewBuilder control: () -> Control) {
-        self.title = Text(title)
-        self.description = description.flatMap { $0.isEmpty ? nil : HelpText($0) }
-        self.alignTop = alignTop
-        self.control = control()
-    }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S, description: LocalizedStringKey? = nil, alignTop: Bool = false, @ViewBuilder control: () -> Control) {
         self.title = Text(verbatim: String(title))
         self.description = description.map { HelpText($0) }
@@ -70,12 +65,6 @@ public struct RXFormRow<Control: View>: View {
         self.control = control()
     }
 
-    public init<S: StringProtocol, D: StringProtocol>(_ title: S, description: D?, alignTop: Bool = false, @ViewBuilder control: () -> Control) {
-        self.title = Text(verbatim: String(title))
-        self.description = description.flatMap { $0.isEmpty ? nil : HelpText($0) }
-        self.alignTop = alignTop
-        self.control = control()
-    }
 
     init(titleText: Text, description: HelpText?, alignTop: Bool = false, @ViewBuilder control: () -> Control) {
         self.title = titleText
@@ -197,15 +186,11 @@ public struct SwitchRow: View {
         _isOn = isOn
     }
 
-    public init<D: StringProtocol>(_ title: LocalizedStringKey, description: D?, isOn: Binding<Bool>) {
-        self.title = Text(title)
-        self.description = description.flatMap { $0.isEmpty ? nil : HelpText($0) }
-        _isOn = isOn
-    }
 
-    public init<S: StringProtocol>(_ title: S, description: String? = nil, isOn: Binding<Bool>) {
+    @_disfavoredOverload
+    public init<S: StringProtocol>(_ title: S, description: LocalizedStringKey? = nil, isOn: Binding<Bool>) {
         self.title = Text(verbatim: String(title))
-        self.description = description.flatMap { $0.isEmpty ? nil : HelpText($0) }
+        self.description = description.map { HelpText($0) }
         _isOn = isOn
     }
 
@@ -343,12 +328,13 @@ public struct NumberFieldRow: View {
         self.unit = unit.map { Text($0) }
     }
 
-    public init<S: StringProtocol>(_ title: S, description: String? = nil, value: Binding<Int>, in range: ClosedRange<Int>, unit: String? = nil) {
+    @_disfavoredOverload
+    public init<S: StringProtocol>(_ title: S, description: LocalizedStringKey? = nil, value: Binding<Int>, in range: ClosedRange<Int>, unit: LocalizedStringKey? = nil) {
         self.title = Text(verbatim: String(title))
-        self.description = description.flatMap { $0.isEmpty ? nil : HelpText($0) }
+        self.description = description.map { HelpText($0) }
         _value = value
         self.range = range
-        self.unit = unit.map { Text(verbatim: $0) }
+        self.unit = unit.map { Text($0) }
     }
 
     private func commitText() {
@@ -402,6 +388,7 @@ public struct SectionTitle<Trailing: View>: View {
         self.trailing = trailing()
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S, count: Int? = nil, @ViewBuilder trailing: () -> Trailing) {
         self.title = Text(verbatim: String(title))
         self.count = count
@@ -428,6 +415,7 @@ public extension SectionTitle where Trailing == EmptyView {
         self.init(title, count: count) { EmptyView() }
     }
 
+    @_disfavoredOverload
     init<S: StringProtocol>(_ title: S, count: Int? = nil) {
         self.init(title, count: count) { EmptyView() }
     }

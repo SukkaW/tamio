@@ -47,6 +47,7 @@ public struct CapsLabel: View {
         self.color = color
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ text: S, color: Color = .rxInkSecondary) {
         self.text = Text(verbatim: String(text))
         self.color = color
@@ -72,6 +73,7 @@ public struct CardHead<Trailing: View>: View {
         self.trailing = trailing()
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S, @ViewBuilder trailing: () -> Trailing) {
         self.label = CapsLabel(title)
         self.trailing = trailing()
@@ -92,6 +94,7 @@ public extension CardHead where Trailing == EmptyView {
         self.init(title) { EmptyView() }
     }
 
+    @_disfavoredOverload
     init<S: StringProtocol>(_ title: S) {
         self.init(title) { EmptyView() }
     }
@@ -101,6 +104,7 @@ public extension CardHead where Trailing == EmptyView {
 public struct HintText: View {
     let text: Text
     public init(_ text: LocalizedStringKey) { self.text = Text(text) }
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ text: S) { self.text = Text(verbatim: String(text)) }
     public var body: some View {
         text
@@ -119,6 +123,7 @@ public struct HelpText: View {
         self.isError = isError
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ text: S, isError: Bool = false) {
         self.text = Text(verbatim: String(text))
         self.isError = isError

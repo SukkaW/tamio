@@ -175,6 +175,7 @@ public struct RXChip: View {
         self.action = action
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S, isOn: Bool, action: @escaping () -> Void) {
         self.title = Text(verbatim: String(title))
         self.isOn = isOn
@@ -223,6 +224,7 @@ public extension View {
 public struct RXSectionHeader: View {
     let label: CapsLabel
     public init(_ title: LocalizedStringKey) { self.label = CapsLabel(title) }
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S) { self.label = CapsLabel(title) }
     public var body: some View {
         label

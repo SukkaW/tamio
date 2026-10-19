@@ -399,7 +399,7 @@ struct ConfigKeybindingBuilder: View {
                 .disabled(parsed.steps.count >= 4)
                 .help(ConfigLayout.tr("keybinding.help.make_sequence", default: "Make a sequence: press the first keys, release, then the next"))
 
-                RXField(ConfigLayout.tr("keybinding.field.action", default: "Action"), help: definition?.description) {
+                RXField(ConfigLayout.tr("keybinding.field.action", default: "Action"), help: definition?.description.map { "\($0)" }) {
                     Picker(ConfigLayout.tr("keybinding.field.action", default: "Action"), selection: Binding(get: { parsed.action }, set: { name in edit { $0.action = name; $0.argument = nil } })) {
                         ForEach(KeybindingNames.groups, id: \.title) { group in
                             Section(KeybindingNames.groupTitle(group.title)) {
@@ -546,7 +546,7 @@ struct ConfigKeybindingBuilder: View {
                 }
             default:
                 RXField(definition.type == "text" ? ConfigLayout.tr("keybinding.field.text_to_type", default: "Text to type") : ConfigLayout.tr("keybinding.field.sequence", default: "Sequence"),
-                        help: definition.type == "text" ? ConfigLayout.tr("keybinding.help.escapes_allowed", default: "Escapes such as \\n and \\x1b are allowed.") : nil) {
+                        help: definition.type == "text" ? "\(ConfigLayout.tr("keybinding.help.escapes_allowed", default: "Escapes such as \\n and \\x1b are allowed."))" : nil) {
                     TextField(definition.type == "text" ? ConfigLayout.tr("keybinding.placeholder.text", default: "Text") : ConfigLayout.tr("keybinding.placeholder.sequence", default: "Sequence"), text: argument)
                         .textFieldStyle(.rxMono)
                 }

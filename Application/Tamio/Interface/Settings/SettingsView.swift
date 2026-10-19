@@ -328,7 +328,7 @@ private struct UpdateSettings: View {
                     set: { downloads = $0; Mac.automaticallyDownloadsUpdates = $0 }
                 ))
                 .disabled(!checks)
-                RXFormRow("Check now", description: lastCheck.map { String(localized: "Last checked \(RXFormat.relative($0)).") } ?? String(localized: "Not checked yet.")) {
+                RXFormRow("Check now", description: lastCheck.map { "Last checked \(RXFormat.relative($0))." } ?? "Not checked yet.") {
                     Button("Check for Updates…") {
                         center.checkNow()
                         lastCheck = Date()

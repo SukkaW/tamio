@@ -112,6 +112,7 @@ public struct LegendItem: View {
         self.outlined = outlined
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S, value: String, color: Color, outlined: Bool = false) {
         self.title = Text(verbatim: String(title))
         self.value = value

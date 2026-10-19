@@ -237,7 +237,7 @@ struct PortForwardEditorSheet: View {
     var body: some View {
         SheetScaffold(
             forward == nil ? String(localized: "New Port Forward") : String(localized: "Edit Port Forward"),
-            lead: orientation == .listenLocal ? String(localized: "This Mac :port → server → target") : String(localized: "Server :port → this Mac → target")
+            lead: orientation == .listenLocal ? "This Mac :port → server → target" : "Server :port → this Mac → target"
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 RXField("Orientation") {

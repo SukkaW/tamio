@@ -705,7 +705,7 @@ private struct ContainerList: View {
             if !loaded {
                 ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let problem {
-                EmptyStateView("No containers", systemImage: "shippingbox", message: problem)
+                EmptyStateView("No containers", systemImage: "shippingbox", message: "\(problem)")
                     .frame(maxHeight: .infinity)
             } else {
                 ScrollView {

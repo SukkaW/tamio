@@ -19,14 +19,11 @@ public struct PageTitle: View {
         self.subtitle = subtitle.map { Text($0) }
     }
 
-    public init<Sub: StringProtocol>(_ title: LocalizedStringKey, subtitle: Sub?) {
-        self.title = Text(title)
-        self.subtitle = subtitle.flatMap { $0.isEmpty ? nil : Text(verbatim: String($0)) }
-    }
 
-    public init<S: StringProtocol>(_ title: S, subtitle: String? = nil) {
+    @_disfavoredOverload
+    public init<S: StringProtocol>(_ title: S, subtitle: LocalizedStringKey? = nil) {
         self.title = Text(verbatim: String(title))
-        self.subtitle = subtitle.flatMap { $0.isEmpty ? nil : Text(verbatim: $0) }
+        self.subtitle = subtitle.map { Text($0) }
     }
 
     public var body: some View {
@@ -71,45 +68,20 @@ public struct EmptyStateView: View {
         self.action = action
     }
 
-    public init<M: StringProtocol>(
-        _ title: LocalizedStringKey,
-        systemImage: String,
-        message: M,
-        actionTitle: LocalizedStringKey? = nil,
-        action: (() -> Void)? = nil
-    ) {
-        self.title = Text(title)
-        self.systemImage = systemImage
-        self.message = message.isEmpty ? nil : Text(verbatim: String(message))
-        self.actionTitle = actionTitle.map { Text($0) }
-        self.action = action
-    }
 
-    public init<M: StringProtocol, A: StringProtocol>(
-        _ title: LocalizedStringKey,
-        systemImage: String,
-        message: M,
-        actionTitle: A?,
-        action: (() -> Void)? = nil
-    ) {
-        self.title = Text(title)
-        self.systemImage = systemImage
-        self.message = message.isEmpty ? nil : Text(verbatim: String(message))
-        self.actionTitle = actionTitle.flatMap { $0.isEmpty ? nil : Text(verbatim: String($0)) }
-        self.action = action
-    }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,
         systemImage: String,
-        message: String = "",
-        actionTitle: String? = nil,
+        message: LocalizedStringKey? = nil,
+        actionTitle: LocalizedStringKey? = nil,
         action: (() -> Void)? = nil
     ) {
         self.title = Text(verbatim: String(title))
         self.systemImage = systemImage
-        self.message = message.isEmpty ? nil : Text(verbatim: message)
-        self.actionTitle = actionTitle.flatMap { $0.isEmpty ? nil : Text(verbatim: $0) }
+        self.message = message.map { Text($0) }
+        self.actionTitle = actionTitle.map { Text($0) }
         self.action = action
     }
 
@@ -181,6 +153,7 @@ public struct TableHeaderLabel: View {
         self.alignment = alignment
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ text: S, alignment: Alignment = .leading) {
         self.label = CapsLabel(text)
         self.alignment = alignment
@@ -202,6 +175,7 @@ public struct TableGroupRow: View {
         self.trailing = trailing
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S, trailing: String? = nil) {
         self.title = Text(verbatim: String(title))
         self.trailing = trailing
@@ -253,16 +227,11 @@ public struct SheetScaffold<Content: View, Footer: View>: View {
         self.footer = footer()
     }
 
-    public init<L: StringProtocol>(_ title: LocalizedStringKey, lead: L?, @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
-        self.title = Text(title)
-        self.lead = lead.flatMap { $0.isEmpty ? nil : Text(verbatim: String($0)) }
-        self.content = content()
-        self.footer = footer()
-    }
 
-    public init<S: StringProtocol>(_ title: S, lead: String? = nil, @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+    @_disfavoredOverload
+    public init<S: StringProtocol>(_ title: S, lead: LocalizedStringKey? = nil, @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
         self.title = Text(verbatim: String(title))
-        self.lead = lead.flatMap { $0.isEmpty ? nil : Text(verbatim: $0) }
+        self.lead = lead.map { Text($0) }
         self.content = content()
         self.footer = footer()
     }
@@ -301,6 +270,7 @@ public struct ProgressHUD: View {
         self.text = Text(text)
     }
 
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ text: S) {
         self.text = Text(verbatim: String(text))
     }

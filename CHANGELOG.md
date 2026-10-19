@@ -17,7 +17,8 @@ the user. To release, rename that heading to the version and date
 - **Import servers from OpenSSH configuration.** Servers › Import previews
   concrete Host aliases with their effective address, user, port, credentials,
   source location and compatibility warnings. Includes and defaults are
-  resolved by the Mac's OpenSSH using a frozen, inspected configuration;
+  resolved by the Mac's OpenSSH using a frozen, inspected configuration,
+  with the Mac's own /etc/ssh/ssh_config applied after yours, as ssh does;
   Match exec requires explicit trust, and resolution has cancellation, time
   and output limits. Private keys are copied only with permission, shared
   keys are reused, and existing servers are skipped unless explicitly updated.
@@ -27,6 +28,11 @@ the user. To release, rename that heading to the version and date
   unsupported authentication, forwarding and trust policies are disclosed
   before confirmation. Dynamic Includes that cannot be inspected safely are
   rejected. Available in English and Simplified Chinese.
+- **Tamio speaks Simplified Chinese.** On a Mac set to Simplified Chinese,
+  its pages, sheets, settings and the terminal's configuration catalog are in
+  Chinese; server names, addresses, paths and commands stay as they are. What
+  agents are told through MCP stays in English, so they read it the same on
+  every Mac.
 
 ## [0.2.5] - 2026-10-19
 
