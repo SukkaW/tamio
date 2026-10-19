@@ -13,14 +13,17 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-10-19
+
 ### Changed
 - **Closing the window keeps Tamio running in the background.** Clicking the
   close button or pressing ⌘W closes the window without quitting the app, so
   the MCP server, port forwards and open terminals stay connected and the
   window opens again at once from the Dock, the menu bar or ⌘0. While the
   window is closed, background status polling pauses (waking on demand when an
-  agent asks for metrics) and App Nap is allowed whenever no SSH session is
-  active. Quit (⌘Q) still quits the app.
+  agent asks for metrics, if Live server status is on), Files and Monitor
+  pages close, and App Nap is allowed whenever no SSH session is active. Quit
+  (⌘Q) still quits the app.
 
 ## [0.2.6] - 2026-10-19
 
