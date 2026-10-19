@@ -11,7 +11,7 @@ the user. To release, rename that heading to the version and date
 (`## [0.2.0] - 2026-11-02`), set `MARKETING_VERSION` to match, and tag
 `v0.2.0`.
 
-## [Unreleased]
+## [0.2.6] - 2026-10-19
 
 ### Added
 - **A server can sign in with no password or key.** Credentials in New or
