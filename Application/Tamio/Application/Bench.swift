@@ -9,6 +9,7 @@
 //
 
 #if DEBUG
+    import Combine
     import MachineStatusView
     import NSRemoteShell
     import TamioModule
@@ -28,6 +29,9 @@ import SwiftUI
         var busy = 0.0
         var stretch = 0.0
         var woke = CACurrentMediaTime()
+        let start = CACurrentMediaTime()
+        /// Each stretch of work over 12 ms: when it began, after the action, and how long it ran.
+        var long: [(at: Double, ms: Double)] = []
     }
 
     @MainActor
@@ -51,19 +55,28 @@ import SwiftUI
         /// server, wherever in that window they ran.
         /// The longest single stretch of work in the last `settle`: the hitch.
         static var longest = 0.0
+        /// The long stretches of work in the last `settle`, for a log line.
+        static var stretches = ""
 
         static func settle(for seconds: Double = 0.4, _ action: () -> Void) async -> Double {
             let load = RunLoopLoad()
             let activities = CFRunLoopActivity.afterWaiting.rawValue | CFRunLoopActivity.beforeWaiting.rawValue
             let observer = CFRunLoopObserverCreateWithHandler(nil, activities, true, CFIndex.max) { _, activity in
                 let now = CACurrentMediaTime()
-                if activity == .afterWaiting { load.woke = now } else { load.busy += now - load.woke; load.stretch = max(load.stretch, now - load.woke); load.woke = now }
+                if activity == .afterWaiting { load.woke = now } else {
+                    let ran = now - load.woke
+                    load.busy += ran
+                    load.stretch = max(load.stretch, ran)
+                    if ran > 0.012 { load.long.append((load.woke - load.start, ran)) }
+                    load.woke = now
+                }
             }
             CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
             action()
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             CFRunLoopRemoveObserver(CFRunLoopGetMain(), observer, .commonModes)
             longest = load.stretch * 1000
+            stretches = load.long.map { String(format: "+%.0f:%.0fms", $0.at * 1000, $0.ms * 1000) }.joined(separator: " ")
             return load.busy * 1000
         }
 
@@ -83,12 +96,19 @@ import SwiftUI
                     ))
                 }
             }
+            // TAMIO_BENCH_LIVE=1 gives every card made-up live readings.
+            if environment["TAMIO_BENCH_LIVE"] != nil { LiveStatusCenter.shared.installPreviews() }
             for machine in TamioStore.shared.machineGroup.machines.prefix(Int(environment["TAMIO_BENCH_TERMINALS"] ?? "") ?? 0) {
                 TerminalManager.shared.createSession(withMachineID: machine.id)
             }
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             // The toggle goes to the key window's responder chain.
             MainWindow.show()
+            if let width = Double(environment["TAMIO_BENCH_WIDTH"] ?? ""), let window = Mac.mainWindow {
+                var frame = window.frame
+                frame.size.width = width
+                window.setFrame(frame, display: true)
+            }
             try? await Task.sleep(nanoseconds: 500_000_000)
             let router = AppRouter.shared
             for page in pages.split(separator: ",").map(String.init) {
@@ -109,8 +129,33 @@ import SwiftUI
                     collapse.append(await settle(for: 0.8) { toggleSidebar() })
                     collapseHitch.append(longest)
                     let collapsed = sidebarWidth()
+                    let frames = FrameGaps()
+                    frames.start()
+                    // The sidebar's width at every 4 ms of the slide, and when
+                    // the columnVisibility binding changes: a jump in the widths
+                    // at that moment is the slide being cut short.
+                    let began = CACurrentMediaTime()
+                    var widths: [(Double, CGFloat)] = []
+                    var bindingChanged = ""
+                    let sampler = Timer(timeInterval: 0.004, repeats: true) { _ in
+                        MainActor.assumeIsolated { widths.append((CACurrentMediaTime() - began, sidebarWidth())) }
+                    }
+                    RunLoop.main.add(sampler, forMode: .common)
+                    let watch = router.$columnVisibility.dropFirst().sink { value in
+                        bindingChanged += String(format: " +%.0fms:%@", (CACurrentMediaTime() - began) * 1000, String(describing: value).contains("detailOnly") ? "detailOnly" : "all")
+                    }
                     expand.append(await settle(for: 0.8) { toggleSidebar() })
+                    sampler.invalidate(); watch.cancel()
                     expandHitch.append(longest)
+                    var steps: [String] = []
+                    var jumps: [String] = []
+                    for (a, b) in zip(widths, widths.dropFirst()) {
+                        if b.1 != a.1 { steps.append(String(format: "+%.0f:%.0f", b.0 * 1000, b.1)) }
+                        if abs(b.1 - a.1) > 30 { jumps.append(String(format: "+%.0fms %.0f→%.0f", b.0 * 1000, a.1, b.1)) }
+                    }
+                    NSLog("BENCH %@ expand widths %@", page, steps.joined(separator: " "))
+                    NSLog("BENCH %@ expand jumps %@ | binding changed%@", page, jumps.isEmpty ? "none" : jumps.joined(separator: " "), bindingChanged.isEmpty ? " never" : bindingChanged)
+                    NSLog("BENCH %@ expand frames %@", page, frames.stop())
                     NSLog("BENCH %@ sidebar width collapsed %.0f expanded %.0f", page, collapsed, sidebarWidth())
                 }
                 report("\(page) collapse busy", collapse)
@@ -119,6 +164,36 @@ import SwiftUI
                 report("\(page) expand hitch", expandHitch)
             }
             NSLog("BENCH done")
+        }
+
+        /// The frames the window actually showed: each display-link tick's
+        /// timestamp, so a frame the screen missed shows as a gap.
+        @MainActor
+        final class FrameGaps: NSObject {
+            private var link: CADisplayLink?
+            private var stamps: [CFTimeInterval] = []
+            private var began = CACurrentMediaTime()
+
+            func start() {
+                guard let view = Mac.mainWindow?.contentView else { return }
+                began = CACurrentMediaTime()
+                let link = view.displayLink(target: self, selector: #selector(tick(_:)))
+                link.add(to: .main, forMode: .common)
+                self.link = link
+            }
+
+            @objc private func tick(_ link: CADisplayLink) { stamps.append(link.timestamp) }
+
+            /// "interval / gaps over 1.5 intervals, as +start:length ms".
+            func stop() -> String {
+                link?.invalidate()
+                guard stamps.count > 2 else { return "no frames" }
+                let deltas = zip(stamps, stamps.dropFirst()).map { $1 - $0 }
+                let interval = deltas.sorted()[deltas.count / 2]
+                let gaps = zip(stamps, deltas).filter { $1 > interval * 1.5 }
+                    .map { String(format: "+%.0f:%.0fms", ($0 - began) * 1000, $1 * 1000) }
+                return String(format: "%d frames, interval %.1f ms, gaps: ", stamps.count, interval * 1000) + (gaps.isEmpty ? "none" : gaps.joined(separator: " "))
+            }
         }
 
         /// The width of the split view's first pane, 0 when the sidebar is away.
@@ -147,6 +222,43 @@ import SwiftUI
 
         private static func toggleSidebar() {
             NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
+            if ProcessInfo.processInfo.environment["TAMIO_BENCH_TOOLBAR"] != nil {
+                // Every step of the slide: which items still fit, and the
+                // search field's width (narrow when it has collapsed).
+                var last = ""
+                let start = CACurrentMediaTime()
+                let timer = Timer(timeInterval: 0.008, repeats: true) { _ in
+                    MainActor.assumeIsolated {
+                        guard let toolbar = Mac.mainWindow?.toolbar else { return }
+                        let visible = (toolbar.visibleItems ?? []).map { item -> String in
+                            if let search = item as? NSSearchToolbarItem {
+                                return "search(\(Int(search.searchField.frame.width)) pref \(Int(search.preferredWidthForSearchField)))"
+                            }
+                            return item.itemIdentifier.rawValue.split(separator: ".").last.map(String.init) ?? "?"
+                        }
+                        var line = "\(visible.count) of \(toolbar.items.count): " + visible.joined(separator: " ")
+                        if ProcessInfo.processInfo.environment["TAMIO_BENCH_TOOLBAR"] == "frames", let window = Mac.mainWindow {
+                            // Where each item sits in the window, and the room the toolbar has.
+                            func frame(_ item: NSToolbarItem) -> String {
+                                guard let view = item.view, let superview = view.superview else { return "-" }
+                                let rect = superview.convert(view.frame, to: nil)
+                                return String(format: "%.0f+%.0f", rect.minX, rect.width)
+                            }
+                            line += " | window \(Int(window.frame.width)) sidebar \(Int(sidebarWidth())) | "
+                            line += toolbar.items.map { item in
+                                let name = item.itemIdentifier.rawValue.split(separator: ".").last.map { String($0.prefix(6)) } ?? "?"
+                                return "\(name)@\(frame(item))"
+                            }.joined(separator: " ")
+                        }
+                        if line != last {
+                            NSLog("BENCH toolbar +%.0f ms %@", (CACurrentMediaTime() - start) * 1000, line)
+                            last = line
+                        }
+                    }
+                }
+                RunLoop.main.add(timer, forMode: .common)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { timer.invalidate() }
+            }
             if ProcessInfo.processInfo.environment["TAMIO_BENCH_PANES"] != nil {
                 for delay in [0.03, 0.08, 0.15, 0.4] {
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay) { MainActor.assumeIsolated { logPanes(delay) } }

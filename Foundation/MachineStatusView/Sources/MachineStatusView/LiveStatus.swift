@@ -135,7 +135,23 @@ public final class LiveStatusCenter: ObservableObject {
         machine.isNotPlaceholder() && (machine.signsInWithoutCredentials || TamioStore.shared.associatedIdentity(for: machine) != nil)
     }
 
+    #if DEBUG
+        /// Made-up readings for every server, so a benchmark draws the cards
+        /// as they are with live status: the gauges, not a line of text.
+        public func installPreviews() {
+            previewing = true
+            for machine in TamioStore.shared.machineGroup.machines {
+                sessions[machine.id] = .preview(machine: machine)
+            }
+        }
+
+        private var previewing = false
+    #endif
+
     func sync() {
+        #if DEBUG
+            if previewing { return }
+        #endif
         let now = Date()
         leasedUntil = leasedUntil.filter { $0.value > now }
         let store = TamioStore.shared
