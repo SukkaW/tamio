@@ -13,6 +13,12 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+### Fixed
+- **0.2.10 could crash on launch or on Home.** The new card grid trapped
+  when SwiftUI asked it for its ideal size with an unbounded width, which
+  some windows do; the grid now treats any width no row of cards could have
+  as one column.
+
 ## [0.2.10] - 2026-10-20
 
 ### Added

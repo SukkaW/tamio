@@ -320,8 +320,12 @@ private struct CardGrid: Layout {
     func updateCache(_ cache: inout Cache, subviews _: Subviews) { cache.rowHeight = nil }
 
     private func columns(for width: CGFloat) -> (count: Int, width: CGFloat) {
+        // Asked for its ideal size, the grid is proposed an infinite width,
+        // and Int(.infinity) traps (#11): then, and for any width no row of
+        // cards could have, one column of the narrowest cards.
+        guard width.isFinite, width < 100_000 else { return (1, minimumWidth) }
         let count = max(1, Int((width + spacing) / (minimumWidth + spacing)))
-        return (count, (width - spacing * CGFloat(count - 1)) / CGFloat(count))
+        return (count, max(minimumWidth, (width - spacing * CGFloat(count - 1)) / CGFloat(count)))
     }
 
     private func rowHeight(_ subviews: Subviews, cache: inout Cache) -> CGFloat {
@@ -336,8 +340,10 @@ private struct CardGrid: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
-        let width = proposal.width ?? minimumWidth
-        let (count, _) = columns(for: width)
+        let (count, column) = columns(for: proposal.width ?? minimumWidth)
+        // The width the columns add up to: the proposal's when it is a real
+        // one, else the one column's.
+        let width = proposal.width.map { $0.isFinite && $0 < 100_000 ? $0 : column } ?? column
         let rows = rowCount(subviews, columns: count)
         let height = rowHeight(subviews, cache: &cache)
         return CGSize(width: width, height: CGFloat(rows) * height + spacing * CGFloat(max(0, rows - 1)))
