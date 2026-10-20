@@ -13,6 +13,8 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-10-19
+
 ### Fixed
 - **The sidebar slides open smoothly.** Showing the sidebar stuttered, worst
   on Home and with terminals open: every step of the slide redrew Home's
