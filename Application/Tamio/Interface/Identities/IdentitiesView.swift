@@ -511,7 +511,9 @@ private struct AgentFields: View {
 
     var body: some View {
         RXField("Agent", help: agentHelp) {
-            RXPicker(selection: Binding(get: { agent }, set: choose), options: [
+            // Bound to the state, not through Binding(get:set:) with a method:
+            // Swift 6.3 crashes compiling that method's conversion.
+            RXPicker(selection: $agent, options: [
                 .init(.system, "System agent (SSH_AUTH_SOCK)"),
                 .init(.onePassword, "1Password"),
                 .init(.other, "Other socket"),
@@ -533,6 +535,7 @@ private struct AgentFields: View {
             }
         }
         .task(id: draft.agentSocket) { await load() }
+        .onChange(of: agent) { _, next in choose(next) }
         .onAppear {
             agent = draft.agentSocket.isEmpty ? .system
                 : draft.agentSocket == RDIdentity.onePasswordAgentSocket ? .onePassword : .other
@@ -567,7 +570,6 @@ private struct AgentFields: View {
     }
 
     private func choose(_ next: Agent) {
-        agent = next
         switch next {
         case .system: draft.agentSocket = ""
         case .onePassword: draft.agentSocket = RDIdentity.onePasswordAgentSocket
