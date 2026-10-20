@@ -39,27 +39,32 @@ struct MainView: View {
             ZStack {
                 RXWindowBackground()
                     .ignoresSafeArea()
-                // Places (Home, Servers, Settings…) cross-fade with a slight rise,
-                // so the eye follows the change of place.
-                if !router.route.isSession, router.route != .settings {
-                    content
-                        .id(router.route)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .offset(y: 6)),
-                            removal: .opacity
-                        ))
+                // The pages follow the sidebar without being laid out at every
+                // frame of its slide (SidebarSlide); the background stays put.
+                ZStack {
+                    // Places (Home, Servers, Settings…) cross-fade with a slight rise,
+                    // so the eye follows the change of place.
+                    if !router.route.isSession, router.route != .settings {
+                        content
+                            .id(router.route)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .offset(y: 6)),
+                                removal: .opacity
+                            ))
+                    }
+                    if settingsOpened || router.route == .settings {
+                        // Told directly, not through the environment: a change of
+                        // environment reaches every row of every category.
+                        SettingsView(active: router.route == .settings)
+                            .keepsSize(whileHidden: router.route != .settings)
+                            .opacity(router.route == .settings ? 1 : 0)
+                            .animation(router.route == .settings ? .easeOut(duration: 0.16) : nil, value: router.route == .settings)
+                            .allowsHitTesting(router.route == .settings)
+                            .accessibilityHidden(router.route != .settings)
+                    }
+                    SessionPages(route: router.route)
                 }
-                if settingsOpened || router.route == .settings {
-                    // Told directly, not through the environment: a change of
-                    // environment reaches every row of every category.
-                    SettingsView(active: router.route == .settings)
-                        .keepsSize(whileHidden: router.route != .settings)
-                        .opacity(router.route == .settings ? 1 : 0)
-                        .animation(router.route == .settings ? .easeOut(duration: 0.16) : nil, value: router.route == .settings)
-                        .allowsHitTesting(router.route == .settings)
-                        .accessibilityHidden(router.route != .settings)
-                }
-                SessionPages(route: router.route)
+                .followsSidebarWithoutLayout()
             }
             .onChange(of: router.route == .settings) { shown in
                 // Before macOS 26 its toolbar and search field cannot be taken

@@ -23,6 +23,13 @@ the user. To release, rename that heading to the version and date
   ~/.ssh/config offers the agent a host names with IdentityAgent, and reuses
   an agent identity already made for it.
 
+### Fixed
+- **The sidebar slides open with less stutter.** On macOS 26 the sidebar
+  floats over the page, and every step of its slide moved the page's margin,
+  so the whole page was laid out again at each frame. The page now moves
+  with the sidebar without being laid out, and is laid out once, after an
+  opening slide stops or as a closing one starts.
+
 ## [0.2.8] - 2026-10-19
 
 ### Fixed
