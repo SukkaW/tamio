@@ -53,6 +53,7 @@ struct MainView: View {
                     // Told directly, not through the environment: a change of
                     // environment reaches every row of every category.
                     SettingsView(active: router.route == .settings)
+                        .keepsSize(whileHidden: router.route != .settings)
                         .opacity(router.route == .settings ? 1 : 0)
                         .animation(router.route == .settings ? .easeOut(duration: 0.16) : nil, value: router.route == .settings)
                         .allowsHitTesting(router.route == .settings)
@@ -158,7 +159,8 @@ private struct SessionPages: View {
 
 private extension View {
     func sessionPage(active: Bool) -> some View {
-        opacity(active ? 1 : 0)
+        keepsSize(whileHidden: !active)
+            .opacity(active ? 1 : 0)
             // The page coming in fades up quickly; the one going out leaves at
             // once, so two layouts never mix on screen.
             .animation(active ? .easeOut(duration: 0.16) : nil, value: active)
@@ -166,5 +168,33 @@ private extension View {
             .accessibilityHidden(!active)
             .zIndex(active ? 1 : 0)
             .environment(\.isActivePage, active)
+    }
+}
+
+/// A page kept out of sight keeps the size it had when it was last shown.
+/// Otherwise every frame of a sidebar slide or a window resize lays it out
+/// again: a terminal re-wraps its text and resizes the remote shell, and
+/// Settings measures its hundreds of rows. Shown again, it takes the size of
+/// the window once.
+private struct KeepsSizeWhileHidden: ViewModifier {
+    let hidden: Bool
+    @State private var size: CGSize?
+
+    func body(content: Content) -> some View {
+        content
+            .frame(width: hidden ? size?.width : nil, height: hidden ? size?.height : nil)
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { new in
+                if !hidden { size = new }
+            }
+            // Takes whatever it is given, so a page held wider than the window
+            // overflows out of sight instead of widening the stack and
+            // pushing the page in view off centre.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private extension View {
+    func keepsSize(whileHidden hidden: Bool) -> some View {
+        modifier(KeepsSizeWhileHidden(hidden: hidden))
     }
 }

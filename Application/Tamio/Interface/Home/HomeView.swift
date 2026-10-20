@@ -204,16 +204,18 @@ private struct HomeContent: View {
     @EnvironmentObject var store: TamioStore
     @ObservedObject private var filterStore = HomeGroupFilterStore.shared
     @State private var selection: RDMachine.ID?
-    /// The page's width, to share it between the cards and the inspector.
-    @State private var pageWidth: CGFloat = 900
+    /// The inspector's width, worked out from the page's. Kept rather than
+    /// the page's width so the page is not drawn again for every point the
+    /// window or the sidebar moves: it changes only when the inspector would.
+    @State private var inspectorWidth: CGFloat = ServerInspector.width
 
     var filter: HomeGroupFilter {
         filterStore.selection.resolved(in: store.machineGroup.machines)
     }
 
     /// The inspector gives up width before the cards go too narrow.
-    var inspectorWidth: CGFloat {
-        min(ServerInspector.width, max(300, pageWidth - StatusCard.minimumWidth - RX.Space.s4 * 2))
+    static func inspectorWidth(forPage width: CGFloat) -> CGFloat {
+        min(ServerInspector.width, max(300, width.rounded() - StatusCard.minimumWidth - RX.Space.s4 * 2))
     }
 
     var machines: [RDMachine] {
@@ -246,7 +248,10 @@ private struct HomeContent: View {
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { pageWidth = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            let fitted = Self.inspectorWidth(forPage: width)
+            if fitted != inspectorWidth { inspectorWidth = fitted }
+        }
         .background {
             // Esc closes the inspector.
             if selection != nil {

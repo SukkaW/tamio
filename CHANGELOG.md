@@ -13,6 +13,15 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+### Fixed
+- **The sidebar slides open smoothly.** Showing the sidebar stuttered, worst
+  on Home and with terminals open: every step of the slide redrew Home's
+  server cards, laid out again every terminal, Files, Monitor and Settings
+  page kept behind the one in view, and told each terminal's server its new
+  size. Pages out of sight now keep their size until they are shown, Home
+  redraws only when its inspector would change width, and a terminal's server
+  hears its size once it has settled.
+
 ## [0.2.7] - 2026-10-19
 
 ### Changed

@@ -89,7 +89,15 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
     private let stateAccessLock = NSLock()
     private var _terminalSize: CGSize = defaultTerminalSize
     private var _continueDecision: Bool = true
+    /// Main thread only, like the size callback that sets `terminalSize`.
+    private var sizeSettled = false
+    private var pendingSize: DispatchWorkItem?
 
+    /// The size the remote shell is told. A sidebar slide or a window drag
+    /// changes the column count dozens of times, and each change would be a
+    /// window-change request and a redraw by the shell, so a new size waits
+    /// until it has held for a moment. The first goes at once, so a new
+    /// terminal starts at its size.
     public var terminalSize: CGSize {
         get {
             stateAccessLock.lock()
@@ -97,11 +105,25 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
             return _terminalSize
         }
         set {
-            stateAccessLock.lock()
-            _terminalSize = newValue
-            stateAccessLock.unlock()
-            shell.explicitRequestStatusPickup()
+            pendingSize?.cancel()
+            guard sizeSettled else {
+                sizeSettled = true
+                commitTerminalSize(newValue)
+                return
+            }
+            let commit = DispatchWorkItem { [weak self] in self?.commitTerminalSize(newValue) }
+            pendingSize = commit
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.sizeSettleDelay, execute: commit)
         }
+    }
+
+    static let sizeSettleDelay: TimeInterval = 0.12
+
+    private func commitTerminalSize(_ size: CGSize) {
+        stateAccessLock.lock()
+        _terminalSize = size
+        stateAccessLock.unlock()
+        shell.explicitRequestStatusPickup()
     }
 
     private var _dataBuffer: String = ""
