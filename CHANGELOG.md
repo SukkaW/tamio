@@ -13,6 +13,8 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-10-20
+
 ### Fixed
 - **0.2.10 could crash on launch or on Home.** The new card grid trapped
   when SwiftUI asked it for its ideal size with an unbounded width, which
