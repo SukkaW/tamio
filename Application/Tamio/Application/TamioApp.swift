@@ -171,7 +171,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Mac.mayTerminate = { AppDelegate.shared.mayTerminate() }
         Mac.openApp = { MainWindow.show() }
         observeWindows()
-        SidebarSlide.shared.start()
         MenubarTool.shared.restore()
         #if DEBUG
             if ProcessInfo.processInfo.environment["TAMIO_PREVIEW_TERMINAL"] != nil,

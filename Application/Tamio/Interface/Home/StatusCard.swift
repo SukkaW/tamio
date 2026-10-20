@@ -25,7 +25,7 @@ struct StatusCard: View {
 
     /// Small: three or four across a usual window.
     static let minimumWidth: CGFloat = 240
-    static let maximumWidth: CGFloat = 320
+
 
     var body: some View {
         let read = store.machineGroup[machine]
@@ -93,6 +93,10 @@ struct StatusCard: View {
                 .fixedSize()
                 .help(String(localized: "More actions"))
             }
+            // Fixed: the width the card is proposed stops here, so the
+            // buttons are not laid out again at every step of a sidebar
+            // slide or a window resize.
+            .fixedSize()
         }
     }
 
@@ -130,7 +134,9 @@ struct OSLogo: View {
     var body: some View {
         let release = session.status.system.releaseName
         if let asset = Self.asset(for: release) {
-            Image(asset)
+            // An NSImage kept per asset: Image(name) looks the asset up again
+            // at every layout, which the sidebar's slide does per frame.
+            Image(nsImage: Self.image(asset))
                 .resizable()
                 .renderingMode(.template)
                 .scaledToFit()
@@ -139,6 +145,16 @@ struct OSLogo: View {
                 .help(release)
                 .accessibilityLabel(release)
         }
+    }
+
+    nonisolated(unsafe) private static var images: [String: NSImage] = [:]
+
+    @MainActor static func image(_ asset: String) -> NSImage {
+        if let image = images[asset] { return image }
+        let image = NSImage(named: asset) ?? NSImage()
+        image.isTemplate = true
+        images[asset] = image
+        return image
     }
 
     /// "Ubuntu 24.04.1 LTS" → os-ubuntu, "macOS 26.6" → os-apple, any other
@@ -210,7 +226,7 @@ private struct SystemLine: View {
         let system = session.status.system
         let release = system.releaseName
         let uptime = system.uptimeSec > 0 ? String(localized: "up \(RXFormat.duration(system.uptimeSec))") : ""
-        ViewThatFits(in: .horizontal) {
+        FirstThatFits {
             if showsText, !release.isEmpty, !uptime.isEmpty { line(release + " · " + uptime) }
             if showsText, !release.isEmpty { line(release) }
             OSLogo(session: session, size: 12)
@@ -302,6 +318,10 @@ struct StatusSlots: View {
                 .foregroundStyle(.rxInkSecondary)
                 .lineLimit(1)
         }
+        // Fixed, so the width the column proposes never reaches the gauge
+        // or its caption: at every step of the sidebar's slide they would
+        // be laid out again, and the text resolved again.
+        .fixedSize()
         .frame(minWidth: 0, maxWidth: .infinity)
         .help(help)
         .accessibilityElement(children: .combine)
@@ -432,5 +452,35 @@ struct LoadRings: View {
         .frame(width: 40, height: 40)
         .animation(.easeOut(duration: 0.5), value: values)
         .help(String(localized: "Load \(String(format: "%.2f", load.0)) · \(String(format: "%.2f", load.1)) · \(String(format: "%.2f", load.2)) on \(cores) cores"))
+    }
+}
+
+/// The first of its children whose ideal width fits the width proposed, as
+/// ViewThatFits in the horizontal axis. The children are measured at their
+/// ideal size, the same proposal every time, so SwiftUI's cache answers;
+/// ViewThatFits measures them at each width it is given, and a sidebar
+/// sliding over a page of cards gives it a new one every frame.
+struct FirstThatFits: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
+        guard let chosen = chosen(proposal, subviews) else { return .zero }
+        return subviews[chosen].sizeThatFits(.unspecified)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        let chosen = chosen(proposal, subviews)
+        for (index, subview) in subviews.enumerated() {
+            if index == chosen {
+                subview.place(at: bounds.origin, anchor: .topLeading, proposal: .unspecified)
+            } else {
+                // Out of the window, at no size: a layout places every child.
+                subview.place(at: CGPoint(x: -100_000, y: -100_000), anchor: .topLeading, proposal: .zero)
+            }
+        }
+    }
+
+    private func chosen(_ proposal: ProposedViewSize, _ subviews: Subviews) -> Int? {
+        guard !subviews.isEmpty else { return nil }
+        guard let width = proposal.width else { return 0 }
+        return subviews.indices.first { subviews[$0].sizeThatFits(.unspecified).width <= width } ?? subviews.count - 1
     }
 }

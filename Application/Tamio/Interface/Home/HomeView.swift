@@ -278,11 +278,7 @@ private struct HomeContent: View {
             EmptyStateView(noMatchTitle, systemImage: "magnifyingglass")
                 .rxCard()
         } else {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: StatusCard.minimumWidth, maximum: StatusCard.maximumWidth), spacing: RX.Space.s3, alignment: .top)],
-                alignment: .leading,
-                spacing: RX.Space.s3
-            ) {
+            CardGrid(minimumWidth: StatusCard.minimumWidth, spacing: RX.Space.s3) {
                 ForEach(machines) { machine in
                     // A click shows the card's server in the panel; the panel's
                     // close button and Esc put it away.
@@ -299,6 +295,63 @@ private struct HomeContent: View {
         case .all: return "No servers match “\(search)”"
         case .ungrouped: return "No servers in no group match “\(search)”"
         case let .group(name): return "No servers in \(name) match “\(search)”"
+        }
+    }
+}
+
+/// As many columns as cards of at least `minimumWidth` fit, sharing the row
+/// between them, so no width is left over at the trailing edge. Not lazy: when
+/// the width crosses into one more or one fewer column (the sidebar sliding
+/// open, the window resized), the cards already there are only moved. A
+/// LazyVGrid rebuilt its rows at that frame, and the slide stuttered.
+///
+/// The cards are all one height, whatever their width, so the grid measures
+/// one of them, at a proposal that never changes so SwiftUI's cache answers,
+/// instead of every card at every width the slide passes through.
+private struct CardGrid: Layout {
+    let minimumWidth: CGFloat
+    let spacing: CGFloat
+
+    struct Cache {
+        var rowHeight: CGFloat?
+    }
+
+    func makeCache(subviews _: Subviews) -> Cache { Cache() }
+    func updateCache(_ cache: inout Cache, subviews _: Subviews) { cache.rowHeight = nil }
+
+    private func columns(for width: CGFloat) -> (count: Int, width: CGFloat) {
+        let count = max(1, Int((width + spacing) / (minimumWidth + spacing)))
+        return (count, (width - spacing * CGFloat(count - 1)) / CGFloat(count))
+    }
+
+    private func rowHeight(_ subviews: Subviews, cache: inout Cache) -> CGFloat {
+        if let height = cache.rowHeight { return height }
+        let height = subviews.first?.sizeThatFits(ProposedViewSize(width: minimumWidth, height: nil)).height ?? 0
+        cache.rowHeight = height
+        return height
+    }
+
+    private func rowCount(_ subviews: Subviews, columns: Int) -> Int {
+        (subviews.count + columns - 1) / columns
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
+        let width = proposal.width ?? minimumWidth
+        let (count, _) = columns(for: width)
+        let rows = rowCount(subviews, columns: count)
+        let height = rowHeight(subviews, cache: &cache)
+        return CGSize(width: width, height: CGFloat(rows) * height + spacing * CGFloat(max(0, rows - 1)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        let (count, column) = columns(for: bounds.width)
+        let height = rowHeight(subviews, cache: &cache)
+        for (index, subview) in subviews.enumerated() {
+            let row = index / count
+            let x = bounds.minX + CGFloat(index % count) * (column + spacing)
+            let y = bounds.minY + CGFloat(row) * (height + spacing)
+            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: column, height: height))
         }
     }
 }

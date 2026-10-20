@@ -33,38 +33,38 @@ struct MainView: View {
         NavigationSplitView(columnVisibility: $router.columnVisibility) {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: RX.sidebarWidth, max: 280)
+                // AppKit moves its own toggle into the sidebar's part of the
+                // toolbar partway through the slide open, while that part is
+                // too narrow for it: it fell into the overflow menu (»), and
+                // the toolbar jumped, until the sidebar was all the way out.
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             // Pages cross-fade with a slight rise, so the eye follows the change
             // of place instead of seeing the content column jump.
             ZStack {
                 RXWindowBackground()
                     .ignoresSafeArea()
-                // The pages follow the sidebar without being laid out at every
-                // frame of its slide (SidebarSlide); the background stays put.
-                ZStack {
-                    // Places (Home, Servers, Settings…) cross-fade with a slight rise,
-                    // so the eye follows the change of place.
-                    if !router.route.isSession, router.route != .settings {
-                        content
-                            .id(router.route)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .offset(y: 6)),
-                                removal: .opacity
-                            ))
-                    }
-                    if settingsOpened || router.route == .settings {
-                        // Told directly, not through the environment: a change of
-                        // environment reaches every row of every category.
-                        SettingsView(active: router.route == .settings)
-                            .keepsSize(whileHidden: router.route != .settings)
-                            .opacity(router.route == .settings ? 1 : 0)
-                            .animation(router.route == .settings ? .easeOut(duration: 0.16) : nil, value: router.route == .settings)
-                            .allowsHitTesting(router.route == .settings)
-                            .accessibilityHidden(router.route != .settings)
-                    }
-                    SessionPages(route: router.route)
+                // Places (Home, Servers, Settings…) cross-fade with a slight rise,
+                // so the eye follows the change of place.
+                if !router.route.isSession, router.route != .settings {
+                    content
+                        .id(router.route)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .offset(y: 6)),
+                            removal: .opacity
+                        ))
                 }
-                .followsSidebarWithoutLayout()
+                if settingsOpened || router.route == .settings {
+                    // Told directly, not through the environment: a change of
+                    // environment reaches every row of every category.
+                    SettingsView(active: router.route == .settings)
+                        .keepsSize(whileHidden: router.route != .settings)
+                        .opacity(router.route == .settings ? 1 : 0)
+                        .animation(router.route == .settings ? .easeOut(duration: 0.16) : nil, value: router.route == .settings)
+                        .allowsHitTesting(router.route == .settings)
+                        .accessibilityHidden(router.route != .settings)
+                }
+                SessionPages(route: router.route)
             }
             .onChange(of: router.route == .settings) { shown in
                 // Before macOS 26 its toolbar and search field cannot be taken
@@ -73,6 +73,10 @@ struct MainView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.easeOut(duration: 0.2), value: router.route.isSession ? nil : router.route)
+            .toolbar {
+                // In the content's part of the toolbar, which always has room.
+                ToolbarItem(placement: .navigation) { SidebarToggle() }
+            }
             // Set here, outside the page transition, so the toolbar never falls
             // back to its opaque background while one page fades into another.
             .rxClearToolbar()
@@ -201,5 +205,18 @@ private struct KeepsSizeWhileHidden: ViewModifier {
 private extension View {
     func keepsSize(whileHidden hidden: Bool) -> some View {
         modifier(KeepsSizeWhileHidden(hidden: hidden))
+    }
+}
+
+/// Shows and hides the sidebar, as AppKit's own toggle does (the same action,
+/// so the same slide), from a place in the toolbar it never has to leave.
+private struct SidebarToggle: View {
+    var body: some View {
+        Button {
+            NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
+        } label: {
+            Label("Toggle Sidebar", systemImage: "sidebar.leading")
+        }
+        .help(Text("Show or hide the sidebar (⌃⌘S)"))
     }
 }

@@ -171,10 +171,21 @@ private struct PageToolbar<Leading: View, Trailing: View>: ViewModifier {
                             if let primary { primary }
                         }
                     }
+                    if let search {
+                        // Tamio's own field, not .searchable's: on macOS 26 the
+                        // system one takes 325 pt, and while the sidebar slides
+                        // open the toolbar is briefly short of room, so it
+                        // folded to an icon and back (pushing the sidebar
+                        // button into the overflow menu) mid-slide.
+                        ToolbarItem(placement: .primaryAction) {
+                            RXSearchField(search.prompt, text: search.text, width: Self.searchWidth)
+                        }
+                    }
                 }
             }
-            .modifier(OptionalSearch(text: isActive ? search?.text : nil, prompt: search?.prompt ?? "Search"))
     }
+
+    static var searchWidth: CGFloat { 200 }
 }
 
 /// How AppKit spaces the symbols of a toolbar group.
@@ -189,21 +200,6 @@ struct ToolbarCapsuleMetrics {
     static let single = ToolbarCapsuleMetrics(minSlot: 0)
     /// A `ControlGroup`.
     static let controlGroup = ToolbarCapsuleMetrics(spacing: 9, minSlot: 34.5, inset: 0)
-}
-
-/// Toolbar search for pages that are never kept hidden (session pages search
-/// inside the page instead: a hidden page's search field would stay in the toolbar).
-private struct OptionalSearch: ViewModifier {
-    let text: Binding<String>?
-    let prompt: LocalizedStringKey
-
-    func body(content: Content) -> some View {
-        if let text {
-            content.searchable(text: text, placement: .toolbar, prompt: Text(prompt))
-        } else {
-            content
-        }
-    }
 }
 
 /// A toolbar action: a symbol, with its title as the tooltip and accessibility
