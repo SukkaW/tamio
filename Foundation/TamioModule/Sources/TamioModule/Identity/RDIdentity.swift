@@ -65,6 +65,9 @@ public struct RDIdentity: Codable, Identifiable, Equatable, Sendable {
     }
 
     public func getKeyType() -> String {
+        if usesAgent {
+            return String(localized: "SSH Agent")
+        }
         if privateKey.count > 0, publicKey.count > 0 {
             if password.count > 0 {
                 return String(localized: "Key Pair")
@@ -91,7 +94,9 @@ public struct RDIdentity: Codable, Identifiable, Equatable, Sendable {
     /// the server's business.
     public func callAuthenticationWith(remote: NSRemoteShell, username: String) {
         if remote.isAuthenticated { return }
-        if privateKey.count > 0 || publicKey.count > 0 {
+        if usesAgent {
+            remote.authenticate(with: username, withAgentSocket: resolvedAgentSocket, publicKey: publicKey.isEmpty ? nil : publicKey)
+        } else if privateKey.count > 0 || publicKey.count > 0 {
             remote.authenticate(with: username, andPublicKey: publicKey, andPrivateKey: privateKey, andPassword: password)
         } else {
             remote.authenticate(with: username, andPassword: password)
@@ -124,10 +129,33 @@ public extension RDIdentity {
         return trimmed.isEmpty ? authDescription : trimmed
     }
 
-    /// A password or a key to sign in with.
+    /// A password or a key to sign in with, or an agent that holds one.
     var hasCredentials: Bool {
-        !password.isEmpty || !privateKey.isEmpty
+        usesAgent || !password.isEmpty || !privateKey.isEmpty
     }
+
+    /// Signs in with a key an SSH agent holds (ssh-agent, 1Password,
+    /// Secretive), which never leaves the agent. `publicKey`, when set, is the
+    /// one key of the agent's to offer.
+    var usesAgent: Bool { attachment[Self.agentSocketKey] != nil }
+
+    /// The agent's socket as the user gave it ("~/Library/…"), "" for the
+    /// one SSH_AUTH_SOCK names; nil when the identity does not use an agent.
+    /// Kept with "~" so it means the same on each of the user's Macs.
+    var agentSocket: String? {
+        get { attachment[Self.agentSocketKey] }
+        set { attachment[Self.agentSocketKey] = newValue }
+    }
+
+    /// The socket to connect to, nil for SSH_AUTH_SOCK.
+    var resolvedAgentSocket: String? {
+        guard let socket = agentSocket?.trimmingCharacters(in: .whitespaces), !socket.isEmpty else { return nil }
+        return (socket as NSString).expandingTildeInPath
+    }
+
+    static let agentSocketKey = "agent.socket"
+    /// Where 1Password's SSH agent listens.
+    static let onePasswordAgentSocket = "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 
     /// The credentials typed into one server's editor rather than chosen from
     /// Identities. Hidden from every identity list, never tried on other
@@ -139,6 +167,11 @@ public extension RDIdentity {
 
     /// "Key pair · ed25519", "Password" style description.
     var authDescription: String {
+        if usesAgent {
+            let agent = agentSocket == Self.onePasswordAgentSocket ? "1Password" : String(localized: "SSH agent")
+            if let type = keyAlgorithm { return "\(agent) · \(type)" }
+            return agent
+        }
         if !privateKey.isEmpty {
             if let type = keyAlgorithm { return String(localized: "Key pair · \(type)") }
             return String(localized: "Key pair")

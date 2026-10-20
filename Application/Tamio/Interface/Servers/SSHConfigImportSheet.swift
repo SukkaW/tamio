@@ -62,7 +62,12 @@ private final class SSHConfigImportModel: ObservableObject {
             choices = Dictionary(uniqueKeysWithValues: candidates.map { candidate in
                 var choice = SSHConfigImportChoice()
                 choice.selected = candidate.status == .ready && candidate.existing == nil
-                if let identity = candidate.machine.associatedIdentity { choice.credential = identity }
+                if let identity = candidate.machine.associatedIdentity {
+                    choice.credential = identity
+                } else if candidate.agentSocket != nil {
+                    // The host's own config says how it signs in.
+                    choice.credential = "agent"
+                }
                 return (candidate.id, choice)
             })
             busy = false
@@ -104,6 +109,8 @@ private final class SSHConfigImportModel: ObservableObject {
             let credential: OpenSSHCredentialChoice
             if choice.credential.hasPrefix("file:") {
                 credential = .importFile(String(choice.credential.dropFirst(5)), passphrase: choice.passphrase)
+            } else if choice.credential == "agent", let socket = candidate.agentSocket {
+                credential = .agent(socket: socket, publicKey: candidate.agentPublicKey)
             } else if let id = UUID(uuidString: choice.credential) {
                 credential = .existing(id)
             } else {
@@ -361,10 +368,19 @@ private struct SSHConfigImportRow: View {
         .rxCard()
     }
 
+    private func agentName(_ socket: String) -> String {
+        if socket.isEmpty { return "SSH_AUTH_SOCK" }
+        if socket == RDIdentity.onePasswordAgentSocket { return "1Password" }
+        return socket
+    }
+
     private var credentialSection: some View {
         VStack(alignment: .leading, spacing: RX.Space.s2) {
             Picker("Credentials", selection: $choice.credential) {
                 Text("Configure credentials later").tag("none")
+                if let socket = candidate.agentSocket {
+                    Text("Use the SSH agent this host names (\(agentName(socket)))").tag("agent")
+                }
                 ForEach(identities) { identity in
                     Text(identity.displayName).tag(identity.id.uuidString)
                 }
@@ -385,6 +401,11 @@ private struct SSHConfigImportRow: View {
                     .textFieldStyle(.rx)
                 Text("A passphrase you enter is saved with this identity. It is never read from Keychain automatically.")
                     .font(.caption).foregroundStyle(.secondary)
+            } else if choice.credential == "agent" {
+                Text(candidate.agentPublicKey == nil
+                    ? "Signs in with the keys the agent holds. Nothing private is copied into Tamio."
+                    : "Signs in with the agent's key for this host. Nothing private is copied into Tamio.")
+                    .font(.callout).foregroundStyle(.secondary)
             } else if choice.credential == "none" {
                 Text("This server will be saved without credentials. Configure an identity before connecting.")
                     .font(.callout).foregroundStyle(.secondary)

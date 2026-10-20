@@ -71,6 +71,15 @@ typedef BOOL (^NSRemoteShellHostKeyVerifier)(NSString *host, NSNumber *port, NSS
 /// that trusts the connection itself (Tailscale SSH) accepts. One that wants
 /// credentials refuses, and getLastError says which it takes.
 - (void)authenticateWithoutCredentials:(NSString *)username;
+/// Signs in with a key an SSH agent holds (ssh-agent, 1Password, Secretive):
+/// the agent signs, the private key never comes here. `socketPath` is the
+/// agent's socket, nil for SSH_AUTH_SOCK. With `publicKey` ("ssh-ed25519
+/// AAAA…") only that key is offered, else each key the agent lists in turn.
+/// An agent may ask the user to approve each signature, so a key is given
+/// up to 25 seconds.
+- (void)authenticateWith:(NSString *)username
+         withAgentSocket:(nullable NSString *)socketPath
+               publicKey:(nullable NSString *)publicKey;
 
 #pragma mark helper
 

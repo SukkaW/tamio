@@ -60,7 +60,7 @@ Tamio must be running with **Settings › MCP › MCP server** on (it is by defa
 
 | Tool | What it does |
 |---|---|
-| `list_hosts` | Servers (filter by `query`, `group`, `tag`); `auth` is `key`, `password`, `none` (signs in with neither) or `missing` (Tamio has nothing to sign in with) |
+| `list_hosts` | Servers (filter by `query`, `group`, `tag`); `auth` is `key`, `agent` (a key the user's SSH agent holds, such as 1Password; it may ask the user to approve), `password`, `none` (signs in with neither) or `missing` (Tamio has nothing to sign in with) |
 | `get_host` | One server, with live status |
 | `get_metrics` | Live CPU, memory, disk, load, network, traffic, OS |
 | `export_ssh_config` | `Host` blocks, no keys |

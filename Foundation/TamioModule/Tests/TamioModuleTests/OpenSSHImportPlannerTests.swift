@@ -242,6 +242,48 @@ final class OpenSSHImportPlannerTests: XCTestCase {
         #endif
     }
 
+    func testIdentityAgentBecomesAnAgentIdentity() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOa/gQlTokJ+1fxS7kIwkGUAxxxxxxxxxxxxxxxxxxxxxxxx work laptop"
+        let pub = directory.appendingPathComponent("op.pub")
+        try publicKey.write(to: pub, atomically: true, encoding: .utf8)
+        let onePassword = NSHomeDirectory() + "/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+
+        let candidate = plan(["identityagent": [onePassword], "identityfile": [pub.path]])
+        XCTAssertEqual(candidate.agentSocket, RDIdentity.onePasswordAgentSocket, "kept with ~, to hold on each Mac")
+        XCTAssertEqual(candidate.agentPublicKey, publicKey, "the public half beside the IdentityFile names the key")
+        XCTAssertFalse(candidate.diagnostics.contains { $0.contains("does not use") })
+
+        let batch = try OpenSSHImportPlanner.prepare(
+            candidates: [candidate],
+            selections: [selection(credential: .agent(socket: RDIdentity.onePasswordAgentSocket, publicKey: publicKey))],
+            machines: [], identities: []
+        )
+        let identity = try XCTUnwrap(batch.identities.first)
+        XCTAssertTrue(identity.usesAgent)
+        XCTAssertEqual(identity.agentSocket, RDIdentity.onePasswordAgentSocket)
+        XCTAssertEqual(identity.publicKey, publicKey)
+        XCTAssertTrue(identity.privateKey.isEmpty, "nothing private comes into Tamio")
+        XCTAssertFalse(identity.authenticAutomatically)
+        XCTAssertEqual(identity.name, "work laptop")
+        XCTAssertEqual(batch.machines[0].associatedIdentity, identity.id.uuidString)
+
+        // Imported again, the agent identity is the server's at once.
+        let again = plan(["identityagent": [onePassword], "identityfile": [pub.path]], identities: batch.identities)
+        XCTAssertEqual(again.machine.associatedIdentity, identity.id.uuidString)
+    }
+
+    func testIdentityAgentSocketsAreKeptOnlyWhenTheyCanBeResolved() {
+        XCTAssertEqual(plan(["identityagent": ["SSH_AUTH_SOCK"]]).agentSocket, "", "SSH_AUTH_SOCK's agent")
+        XCTAssertEqual(plan(["identityagent": ["/opt/agent.sock"]]).agentSocket, "/opt/agent.sock")
+        XCTAssertNil(plan(["identityagent": ["none"]]).agentSocket)
+        let tokens = plan(["identityagent": ["/run/%u/agent.sock"]])
+        XCTAssertNil(tokens.agentSocket)
+        XCTAssertTrue(tokens.diagnostics.contains { $0.contains("SSH agent") })
+        XCTAssertNil(plan().agentSocket, "a host that names no agent")
+    }
+
     private func temporaryDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tamio-planner-tests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])

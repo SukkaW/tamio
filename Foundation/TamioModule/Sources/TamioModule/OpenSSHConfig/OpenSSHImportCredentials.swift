@@ -39,6 +39,49 @@ enum OpenSSHImportCredentials {
         }
     }
 
+    /// IdentityAgent as an agent identity keeps it: "" for SSH_AUTH_SOCK, a
+    /// path under the home folder with "~" so it holds on each of the user's
+    /// Macs. Nil for a value with tokens or variables that cannot be resolved.
+    static func agentSocket(_ value: String) -> String? {
+        if value == "SSH_AUTH_SOCK" || value == "$SSH_AUTH_SOCK" { return "" }
+        guard value.hasPrefix("/") || value.hasPrefix("~"), !value.contains("%"), !value.contains("$") else { return nil }
+        let path = (value as NSString).expandingTildeInPath
+        let home = NSHomeDirectory()
+        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+    }
+
+    /// The public key beside an IdentityFile: the file itself when it is the
+    /// public half (as 1Password sets it up), else its ".pub". Read only to
+    /// name the agent's key; nothing private is opened.
+    static func sidecarPublicKey(_ path: String) -> String? {
+        let candidates = path.hasSuffix(".pub") ? [path] : [path + ".pub"]
+        for candidate in candidates {
+            if let text = try? readRegularFile(candidate, limit: 64 * 1024),
+               publicMaterial(text) != nil
+            {
+                return text.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        return nil
+    }
+
+    /// An agent identity already kept for this socket and key.
+    static func agentIdentity(socket: String, publicKey: String?, identities: [RDIdentity]) -> RDIdentity? {
+        let wanted = publicKey.flatMap(publicMaterial)
+        return identities.first { identity in
+            guard !identity.isPrivate, identity.usesAgent, identity.agentSocket == socket else { return false }
+            return publicMaterial(identity.publicKey) == wanted
+        }
+    }
+
+    static func newAgentIdentity(socket: String, publicKey: String?) -> RDIdentity {
+        var identity = RDIdentity(publicKey: publicKey ?? "", authenticAutomatically: false)
+        identity.agentSocket = socket
+        let comment = publicKey?.split(separator: " ", maxSplits: 2).dropFirst(2).first.map(String.init)
+        identity.name = comment ?? (socket == RDIdentity.onePasswordAgentSocket ? "1Password" : String(localized: "SSH agent"))
+        return identity
+    }
+
     static func importKey(path: String, passphrase: String, identities: [RDIdentity]) throws -> RDIdentity {
         let source = canonicalPath(path)
         let privateKey = try readRegularFile(source, limit: maximumKeyBytes)

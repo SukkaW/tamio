@@ -301,6 +301,20 @@ continue; \
     MakeDispatchSemaphoreWaitWithTimeout(sem)
 }
 
+- (void)authenticateWith:(NSString*)username withAgentSocket:(NSString*)socketPath publicKey:(NSString*)publicKey {
+    if (self.destroyed) return;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    @synchronized (self.requestInvokations) {
+        id block = [^{
+            [self unsafeAuthenticateWith:username withAgentSocket:socketPath publicKey:publicKey];
+            DISPATCH_SEMAPHORE_CHECK_SIGNLE(sem);
+        } copy];
+        [self.requestInvokations addObject:block];
+    }
+    [self.associatedLoop explicitRequestHandle];
+    MakeDispatchSemaphoreWaitWithTimeout(sem)
+}
+
 - (void)authenticateWithoutCredentials:(NSString*)username {
     if (self.destroyed) return;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
@@ -988,6 +1002,103 @@ continue; \
     if (authenticated) {
         self.authenticated = YES;
         NSRLog(@"authenticate success");
+    }
+}
+
+/// The key blob in an OpenSSH public key line ("ssh-ed25519 AAAA… comment").
+static NSData *NSRAgentKeyBlob(NSString *publicKey) {
+    NSArray<NSString *> *parts = [[publicKey stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]
+                                  componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    if (parts.count < 2) { return nil; }
+    return [[NSData alloc] initWithBase64EncodedString:parts[1] options:0];
+}
+
+- (void)unsafeAuthenticateWith:(NSString*)username withAgentSocket:(NSString*)socketPath publicKey:(NSString*)publicKey {
+    if (![self unsafeValidateSession]) {
+        [self unsafeDisconnect];
+        return;
+    }
+    if (self.authenticated) {
+        return;
+    }
+    LIBSSH2_SESSION *session = self.associatedSession;
+    NSString *failure = nil;
+    BOOL authenticated = NO;
+    NSData *wanted = publicKey.length > 0 ? NSRAgentKeyBlob(publicKey) : nil;
+    if (publicKey.length > 0 && !wanted) {
+        @synchronized (self) { self.lastError = @"The public key this identity names cannot be read."; }
+        return;
+    }
+    LIBSSH2_AGENT *agent = libssh2_agent_init(session);
+    if (!agent) {
+        @synchronized (self) { self.lastError = @"Could not start talking to the SSH agent."; }
+        return;
+    }
+    if (socketPath.length > 0) {
+        libssh2_agent_set_identity_path(agent, [socketPath fileSystemRepresentation]);
+    }
+    do {
+        if (libssh2_agent_connect(agent) != 0) {
+            failure = socketPath.length > 0
+                ? [NSString stringWithFormat:@"No SSH agent answers at %@. Is it running?", socketPath]
+                : @"No SSH agent answers at SSH_AUTH_SOCK. Is one running?";
+            break;
+        }
+        if (libssh2_agent_list_identities(agent) != 0) {
+            failure = @"The SSH agent did not list its keys.";
+            break;
+        }
+        struct libssh2_agent_publickey *identity = NULL;
+        struct libssh2_agent_publickey *previous = NULL;
+        int listed = 0;
+        int offered = 0;
+        while (!authenticated) {
+            int rc = libssh2_agent_get_identity(agent, &identity, previous);
+            if (rc != 0) { break; } // 1: no more keys, below 0: an error
+            previous = identity;
+            listed += 1;
+            if (wanted && (identity->blob_len != wanted.length
+                           || memcmp(identity->blob, wanted.bytes, wanted.length) != 0)) {
+                continue;
+            }
+            offered += 1;
+            // The agent may wait for the user to approve the signature
+            // (Touch ID in 1Password), and libssh2 asks again until it has it.
+            NSDate *deadline = [[NSDate alloc] initWithTimeIntervalSinceNow:25];
+            while (true) {
+                if ([deadline timeIntervalSinceNow] < 0) {
+                    failure = @"The SSH agent did not sign in time. Was the request approved?";
+                    break;
+                }
+                long rc = libssh2_agent_userauth(agent, [username UTF8String], identity);
+                if (rc == LIBSSH2_ERROR_EAGAIN) {
+                    usleep(LIBSSH2_CONTINUE_EAGAIN_WAIT);
+                    continue;
+                }
+                authenticated = (rc == 0);
+                break;
+            }
+            if (failure) { break; }
+        }
+        if (authenticated || failure) { break; }
+        if (listed == 0) {
+            failure = @"The SSH agent holds no keys.";
+        } else if (wanted && offered == 0) {
+            failure = @"The SSH agent does not hold the key this identity names.";
+        } else {
+            failure = [NSString stringWithFormat:@"The server did not accept %@ from the SSH agent as %@.",
+                       wanted ? @"the key" : @"any key", username];
+        }
+    } while (0);
+    libssh2_agent_disconnect(agent);
+    libssh2_agent_free(agent);
+    // libssh2's own error for a refused key says less than the one above.
+    libssh2_session_set_last_error(session, 0, NULL);
+    if (authenticated) {
+        self.authenticated = YES;
+        NSRLog(@"authenticate success");
+    } else if (failure) {
+        @synchronized (self) { self.lastError = failure; }
     }
 }
 

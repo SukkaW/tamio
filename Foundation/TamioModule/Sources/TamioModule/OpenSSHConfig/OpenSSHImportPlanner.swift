@@ -10,6 +10,12 @@ public struct OpenSSHImportCandidate: Identifiable, Sendable {
     public var machine: RDMachine
     public let existing: RDMachine?
     public let identityFiles: [String]
+    /// The SSH agent the host signs in through (IdentityAgent), as an agent
+    /// identity keeps it: "" for SSH_AUTH_SOCK's, a path with "~" otherwise.
+    public var agentSocket: String? = nil
+    /// The one key to offer from that agent: the public half beside the
+    /// host's single IdentityFile, when there is one.
+    public var agentPublicKey: String? = nil
     public let diagnostics: [String]
     public let status: OpenSSHImportStatus
     public let canImport: Bool
@@ -19,6 +25,9 @@ public enum OpenSSHCredentialChoice: Sendable, Equatable {
     case none
     case existing(UUID)
     case importFile(String, passphrase: String)
+    /// Sign in through the SSH agent the host names, reusing an agent
+    /// identity for it or making one; no private key comes into Tamio.
+    case agent(socket: String, publicKey: String?)
 }
 
 public struct OpenSSHImportSelection: Sendable {
@@ -114,6 +123,21 @@ public enum OpenSSHImportPlanner {
                 let matches = OpenSSHImportCredentials.matchingIdentities(paths: identityFiles, identities: identities)
                 if matches.count == 1 { machine.associatedIdentity = matches[0].id.uuidString }
             }
+            var agentSocket: String?
+            var agentPublicKey: String?
+            if let agent = value("identityagent"), agent.lowercased() != "none" {
+                if let socket = OpenSSHImportCredentials.agentSocket(agent) {
+                    agentSocket = socket
+                    agentPublicKey = identityFiles.count == 1 ? OpenSSHImportCredentials.sidecarPublicKey(identityFiles[0]) : nil
+                    if machine.associatedIdentity == nil,
+                       let reuse = OpenSSHImportCredentials.agentIdentity(socket: socket, publicKey: agentPublicKey, identities: identities)
+                    {
+                        machine.associatedIdentity = reuse.id.uuidString
+                    }
+                } else {
+                    diagnostics.append(String(localized: "The SSH agent this host names uses expansion Tamio cannot resolve. Choose its socket in an SSH agent identity."))
+                }
+            }
             // OpenSSH prints $SSH_SK_PROVIDER even for ordinary software keys.
             // A configured provider matters only when explicitly requested.
             let customSecurityProvider = scan.directives.contains("securitykeyprovider") && enabled("securitykeyprovider") && value("securitykeyprovider") != "internal"
@@ -127,8 +151,8 @@ public enum OpenSSHImportPlanner {
             if scan.requiresTrust {
                 diagnostics.append(String(localized: "This configuration requires trust and may run local commands. Resolved settings are a snapshot, not live OpenSSH rules."))
             }
-            if enabled("identityagent") || enabled("forwardagent") || enabled("addkeystoagent") || scan.directives.contains("usekeychain") {
-                diagnostics.append(String(localized: "Tamio does not use the OpenSSH agent, keychain integration or agent forwarding. Choose a stored credential or explicitly import a key."))
+            if enabled("forwardagent") || enabled("addkeystoagent") || scan.directives.contains("usekeychain") {
+                diagnostics.append(String(localized: "Tamio does not forward the SSH agent, add keys to it, or read keys from the macOS keychain."))
             }
             if ["localforward", "remoteforward", "dynamicforward", "forwardx11", "tunnel"].contains(where: { enabled($0) }) {
                 diagnostics.append(String(localized: "OpenSSH port, X11 and tunnel forwarding settings are not imported."))
@@ -164,6 +188,7 @@ public enum OpenSSHImportPlanner {
             else { status = .ready }
             var seenDiagnostics = Set<String>()
             return OpenSSHImportCandidate(host: host, machine: machine, existing: existing, identityFiles: identityFiles,
+                                          agentSocket: agentSocket, agentPublicKey: agentPublicKey,
                                           diagnostics: diagnostics.filter { seenDiagnostics.insert($0).inserted },
                                           status: status, canImport: !unsupported)
         }
@@ -218,6 +243,11 @@ public enum OpenSSHImportPlanner {
                 machine.associatedIdentity = id.uuidString
             case let .importFile(path, passphrase):
                 let identity = try OpenSSHImportCredentials.importKey(path: path, passphrase: passphrase, identities: resultIdentities)
+                if !resultIdentities.contains(where: { $0.id == identity.id }) { resultIdentities.append(identity) }
+                machine.associatedIdentity = identity.id.uuidString
+            case let .agent(socket, publicKey):
+                let identity = OpenSSHImportCredentials.agentIdentity(socket: socket, publicKey: publicKey, identities: resultIdentities)
+                    ?? OpenSSHImportCredentials.newAgentIdentity(socket: socket, publicKey: publicKey)
                 if !resultIdentities.contains(where: { $0.id == identity.id }) { resultIdentities.append(identity) }
                 machine.associatedIdentity = identity.id.uuidString
             }

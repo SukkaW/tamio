@@ -20422,6 +20422,367 @@
     },
     "~/.ssh/config": {
       "shouldTranslate": false
+    },
+    "SSH agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH agent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 代理"
+          }
+        }
+      }
+    },
+    "Socket": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Socket"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "套接字"
+          }
+        }
+      }
+    },
+    "The agent macOS starts for you, with the keys ssh-add gave it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent macOS starts for you, with the keys ssh-add gave it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 自动启动的代理，内含用 ssh-add 添加的密钥。"
+          }
+        }
+      }
+    },
+    "Turn on the SSH agent in 1Password › Settings › Developer. It asks you to approve each sign-in.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on the SSH agent in 1Password › Settings › Developer. It asks you to approve each sign-in."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请在 1Password › 设置 › 开发者中开启 SSH 代理。每次登录它都会请你批准。"
+          }
+        }
+      }
+    },
+    "The socket of another agent, such as Secretive or gpg-agent.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The socket of another agent, such as Secretive or gpg-agent."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他代理的套接字，例如 Secretive 或 gpg-agent。"
+          }
+        }
+      }
+    },
+    "System agent (SSH_AUTH_SOCK)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System agent (SSH_AUTH_SOCK)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统代理（SSH_AUTH_SOCK）"
+          }
+        }
+      }
+    },
+    "1Password": {
+      "shouldTranslate": false
+    },
+    "Other socket": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other socket"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他套接字"
+          }
+        }
+      }
+    },
+    "~/.ssh/agent.sock": {
+      "shouldTranslate": false
+    },
+    "Each of the agent's keys is tried in turn. Name one if the server refuses after too many.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each of the agent's keys is tried in turn. Name one if the server refuses after too many."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会依次尝试代理中的每个密钥。如果服务器因尝试次数过多而拒绝，请指定一个。"
+          }
+        }
+      }
+    },
+    "Only this key is offered.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only this key is offered."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只提供这个密钥。"
+          }
+        }
+      }
+    },
+    "not in the agent now": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not in the agent now"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前不在代理中"
+          }
+        }
+      }
+    },
+    "Any key the agent holds": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Any key the agent holds"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代理中的任意密钥"
+          }
+        }
+      }
+    },
+    "%@ (%@)": {
+      "shouldTranslate": false
+    },
+    "The agent holds no keys yet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent holds no keys yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代理中还没有密钥。"
+          }
+        }
+      }
+    },
+    "The SSH agent did not answer.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The SSH agent did not answer."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 代理没有响应。"
+          }
+        }
+      }
+    },
+    "No SSH agent answers at this socket. Is it running?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No SSH agent answers at this socket. Is it running?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个套接字上没有 SSH 代理响应。它在运行吗？"
+          }
+        }
+      }
+    },
+    "No SSH agent answers at SSH_AUTH_SOCK. Is one running?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No SSH agent answers at SSH_AUTH_SOCK. Is one running?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH_AUTH_SOCK 上没有 SSH 代理响应。是否有代理在运行？"
+          }
+        }
+      }
+    },
+    "Signs in with the keys the agent holds. Nothing private is copied into Tamio.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signs in with the keys the agent holds. Nothing private is copied into Tamio."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用代理中的密钥登录。不会把任何私密内容复制到 Tamio。"
+          }
+        }
+      }
+    },
+    "Signs in with the agent's key for this host. Nothing private is copied into Tamio.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signs in with the agent's key for this host. Nothing private is copied into Tamio."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用代理中对应此主机的密钥登录。不会把任何私密内容复制到 Tamio。"
+          }
+        }
+      }
+    },
+    "Use the SSH agent this host names (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the SSH agent this host names (%@)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用此主机指定的 SSH 代理（%@）"
+          }
+        }
+      }
+    },
+    "SSH Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH Agent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 代理"
+          }
+        }
+      }
+    },
+    "The server did not let %@ in without a password or key.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server did not let %@ in without a password or key."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器不允许 %@ 在没有密码或密钥的情况下登录。"
+          }
+        }
+      }
+    },
+    "The SSH agent this host names uses expansion Tamio cannot resolve. Choose its socket in an SSH agent identity.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The SSH agent this host names uses expansion Tamio cannot resolve. Choose its socket in an SSH agent identity."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此主机指定的 SSH 代理使用了 Tamio 无法解析的展开语法。请在 SSH 代理身份凭据中选择它的套接字。"
+          }
+        }
+      }
+    },
+    "Tamio does not forward the SSH agent, add keys to it, or read keys from the macOS keychain.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tamio does not forward the SSH agent, add keys to it, or read keys from the macOS keychain."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tamio 不会转发 SSH 代理、向其添加密钥，也不会从 macOS 钥匙串读取密钥。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

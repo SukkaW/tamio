@@ -17,6 +17,7 @@
 		1D739D0FC4F886FBF900BB47 /* Bench.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D6160F6465AF5B5EFF497B1 /* Bench.swift */; };
 		24E5740380D9EAC687D3FC9E /* BatchRunSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0139DAD3C6106A836B899900 /* BatchRunSheet.swift */; };
 		2B6242749F6B87A0ECB35D0B /* MacStatusItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FECAE3A90867AFF08FC69C1 /* MacStatusItem.swift */; };
+		2CF9355F185C210EA397816B /* SSHAgentKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48D5E8A396EAF04D64CDAFCD /* SSHAgentKeys.swift */; };
 		2E4369F69EA9DF974DF27F6A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5BF8E05669BAD48CA9ADC146 /* Assets.xcassets */; };
 		2F609EB69F20470FF1BE9E8D /* skills in Resources */ = {isa = PBXBuildFile; fileRef = 95B1005E04E501D384F8AEED /* skills */; };
 		3ADFC17BCCDEBF396674C9E8 /* Dialogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C56344885B90F40F06D9F4A /* Dialogs.swift */; };
@@ -101,6 +102,7 @@
 		42B043231E7AF65887A269C2 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		4556288987001E1EA703A8E5 /* TerminalSnippetPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSnippetPanel.swift; sourceTree = "<group>"; };
 		478253D7DC3B55196BDD73C9 /* ServerEditorDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerEditorDialog.swift; sourceTree = "<group>"; };
+		48D5E8A396EAF04D64CDAFCD /* SSHAgentKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHAgentKeys.swift; sourceTree = "<group>"; };
 		4C56344885B90F40F06D9F4A /* Dialogs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dialogs.swift; sourceTree = "<group>"; };
 		55A715F31337168A65B48A07 /* OpenSSHConfigResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSSHConfigResolver.swift; sourceTree = "<group>"; };
 		5AE055DD91FA890DB5DDB079 /* EULA */ = {isa = PBXFileReference; path = EULA; sourceTree = "<group>"; };
@@ -213,6 +215,7 @@
 				2FECAE3A90867AFF08FC69C1 /* MacStatusItem.swift */,
 				655C0A15AF2F03284F556BC5 /* MacUpdates.swift */,
 				55A715F31337168A65B48A07 /* OpenSSHConfigResolver.swift */,
+				48D5E8A396EAF04D64CDAFCD /* SSHAgentKeys.swift */,
 			);
 			path = Mac;
 			sourceTree = "<group>";
@@ -566,6 +569,7 @@
 				A97740C2E4CAAC7E3E21C4DB /* PortForwardBackend.swift in Sources */,
 				742B1D1D68A0C95C3886F494 /* PortForwardView.swift in Sources */,
 				E6B055B6F5DC499B463F136E /* PresentError.swift in Sources */,
+				2CF9355F185C210EA397816B /* SSHAgentKeys.swift in Sources */,
 				A1376A08C03541305FE6BA99 /* SSHConfigImportSheet.swift in Sources */,
 				D228D67549129E4CB2A357B6 /* ServerActions.swift in Sources */,
 				EB87D94F557DAFC57811CD08 /* ServerEditorDialog.swift in Sources */,

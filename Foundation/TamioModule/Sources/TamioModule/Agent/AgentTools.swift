@@ -16,7 +16,7 @@ public struct AgentIdentity: Codable, Equatable, Sendable {
     public var id: String
     public var name: String
     public var group: String
-    /// "key" or "password".
+    /// "key", "agent" (a key an SSH agent holds) or "password".
     public var kind: String
     public var keyType: String?
     public var publicKey: String?
@@ -27,7 +27,7 @@ public struct AgentIdentity: Codable, Equatable, Sendable {
         id = identity.id.uuidString
         name = identity.displayName
         group = identity.group
-        kind = identity.privateKey.isEmpty ? "password" : "key"
+        kind = identity.usesAgent ? "agent" : identity.privateKey.isEmpty ? "password" : "key"
         keyType = identity.keyAlgorithm
         publicKey = identity.publicKey.isEmpty ? nil : identity.publicKey
         usedBy = TamioStore.shared.machineGroup.machines

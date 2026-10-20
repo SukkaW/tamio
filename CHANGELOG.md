@@ -13,6 +13,16 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+### Added
+- **Sign in with keys an SSH agent holds.** An identity can now use an SSH
+  agent instead of a stored key: the system agent, 1Password's, or any other
+  socket such as Secretive's or gpg-agent's. The agent signs; the private key
+  never comes into Tamio, and only the socket and, if you choose one, the key
+  to offer are kept and synced. Edit an identity, choose SSH agent, and pick
+  one of the agent's keys or let each be tried in turn. Importing from
+  ~/.ssh/config offers the agent a host names with IdentityAgent, and reuses
+  an agent identity already made for it.
+
 ## [0.2.8] - 2026-10-19
 
 ### Fixed

@@ -252,6 +252,8 @@ private struct IdentityDetail: View {
 struct IdentityDraft: Equatable {
     enum Method: Hashable {
         case key
+        /// A key an SSH agent holds; it never comes into Tamio.
+        case agent
         case password
     }
 
@@ -263,13 +265,16 @@ struct IdentityDraft: Equatable {
     var publicKey = ""
     var comment = ""
     var automatic = false
+    /// The agent's socket, "" for SSH_AUTH_SOCK's.
+    var agentSocket = ""
 
     init() {}
 
     init(_ identity: RDIdentity) {
         name = identity.name
         group = identity.group
-        method = identity.privateKey.isEmpty && !identity.password.isEmpty ? .password : .key
+        method = identity.usesAgent ? .agent : identity.privateKey.isEmpty && !identity.password.isEmpty ? .password : .key
+        agentSocket = identity.agentSocket ?? ""
         password = identity.password
         privateKey = identity.privateKey
         publicKey = identity.publicKey
@@ -284,6 +289,8 @@ struct IdentityDraft: Equatable {
         switch method {
         case .password:
             return password.isEmpty ? String(localized: "Type the password.") : nil
+        case .agent:
+            return nil
         case .key:
             if trimmedPrivateKey.isEmpty { return String(localized: "Paste or load the private key.") }
             if !trimmedPrivateKey.contains("PRIVATE KEY") {
@@ -301,11 +308,17 @@ struct IdentityDraft: Equatable {
         var result = identity
         result.name = name.trimmingCharacters(in: .whitespaces)
         result.group = group
+        result.agentSocket = method == .agent ? agentSocket.trimmingCharacters(in: .whitespaces) : nil
         switch method {
         case .password:
             result.password = password
             result.privateKey = ""
             result.publicKey = ""
+        case .agent:
+            // The public key names the one key of the agent's to offer.
+            result.password = ""
+            result.privateKey = ""
+            result.publicKey = publicKey.trimmingCharacters(in: .whitespacesAndNewlines)
         case .key:
             // The password field is the key's passphrase.
             result.password = password
@@ -325,6 +338,7 @@ struct IdentityDraft: Equatable {
             || edited.password != identity.password
             || edited.privateKey != identity.privateKey
             || edited.publicKey != identity.publicKey
+            || edited.agentSocket != identity.agentSocket
             || edited.comment != identity.comment
             || edited.authenticAutomatically != identity.authenticAutomatically
     }
@@ -350,7 +364,7 @@ struct IdentityForm: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: RX.Space.s4) {
                 RXField("Name") {
-                    TextField(draft.method == .key ? "Deploy key" : "Office password", text: $draft.name)
+                    TextField(draft.method == .password ? "Office password" : "Deploy key", text: $draft.name)
                         .textFieldStyle(.rx)
                         .disableAutocorrection(true)
                 }
@@ -359,15 +373,15 @@ struct IdentityForm: View {
                         .textFieldStyle(.rx)
                 }
             }
-            if allowsPassword == true {
-                RXField("Authentication") {
-                    RXSegmented(selection: $draft.method, options: [
-                        .init(.key, "SSH key"),
-                        .init(.password, "Password"),
-                    ], caps: false, fullWidth: true)
-                }
+            RXField("Authentication") {
+                RXSegmented(selection: $draft.method, options: [
+                    .init(.key, "SSH key"),
+                    .init(.agent, "SSH agent"),
+                ] + (allowsPassword == true ? [.init(.password, "Password")] : []), caps: false, fullWidth: true)
             }
-            if draft.method == .key {
+            if draft.method == .agent {
+                AgentFields(draft: $draft)
+            } else if draft.method == .key {
                 RXField(
                     "Private key",
                     help: draft.privateKey.isEmpty ? "Ed25519, RSA and ECDSA keys work, in OpenSSH or PEM format." : nil
@@ -479,6 +493,100 @@ struct IdentityForm: View {
             }
             .buttonStyle(.rx(.plain, iconOnly: true))
             .help(showsSecret ? String(localized: "Hide") : String(localized: "Show"))
+        }
+    }
+}
+
+/// Which agent signs, and which of its keys to offer. The keys are read from
+/// the agent each time, public halves only.
+private struct AgentFields: View {
+    @Binding var draft: IdentityDraft
+
+    enum Agent: Hashable { case system, onePassword, other }
+
+    @State private var agent: Agent = .system
+    @State private var keys: [SSHAgentKeys.Key] = []
+    @State private var problem: String?
+    @State private var loading = false
+
+    var body: some View {
+        RXField("Agent", help: agentHelp) {
+            RXPicker(selection: Binding(get: { agent }, set: choose), options: [
+                .init(.system, "System agent (SSH_AUTH_SOCK)"),
+                .init(.onePassword, "1Password"),
+                .init(.other, "Other socket"),
+            ])
+        }
+        if agent == .other {
+            RXField("Socket") {
+                TextField("~/.ssh/agent.sock", text: $draft.agentSocket)
+                    .textFieldStyle(.rxMono)
+                    .disableAutocorrection(true)
+            }
+        }
+        RXField("Key", help: keyHelp, error: problem) {
+            HStack(spacing: RX.Space.s2) {
+                RXPicker(selection: $draft.publicKey, options: keyOptions)
+                Button("Refresh") { Task { await load() } }
+                    .buttonStyle(.rx(size: .small))
+                    .disabled(loading)
+            }
+        }
+        .task(id: draft.agentSocket) { await load() }
+        .onAppear {
+            agent = draft.agentSocket.isEmpty ? .system
+                : draft.agentSocket == RDIdentity.onePasswordAgentSocket ? .onePassword : .other
+        }
+    }
+
+    private var agentHelp: LocalizedStringKey {
+        switch agent {
+        case .system: "The agent macOS starts for you, with the keys ssh-add gave it."
+        case .onePassword: "Turn on the SSH agent in 1Password › Settings › Developer. It asks you to approve each sign-in."
+        case .other: "The socket of another agent, such as Secretive or gpg-agent."
+        }
+    }
+
+    private var keyHelp: LocalizedStringKey {
+        draft.publicKey.isEmpty
+            ? "Each of the agent's keys is tried in turn. Name one if the server refuses after too many."
+            : "Only this key is offered."
+    }
+
+    private var keyOptions: [RXPicker<String>.Option] {
+        var options: [RXPicker<String>.Option] = [.init("", "Any key the agent holds")]
+        options += keys.map { .init($0.line, $0.title) }
+        // A key the agent does not hold now (locked, or another Mac's) stays
+        // chosen rather than vanishing from the identity.
+        if !draft.publicKey.isEmpty, !keys.contains(where: { $0.line == draft.publicKey }),
+           let saved = SSHAgentKeys.Key(line: draft.publicKey)
+        {
+            options.append(.init(draft.publicKey, "\(saved.title) (\(String(localized: "not in the agent now")))"))
+        }
+        return options
+    }
+
+    private func choose(_ next: Agent) {
+        agent = next
+        switch next {
+        case .system: draft.agentSocket = ""
+        case .onePassword: draft.agentSocket = RDIdentity.onePasswordAgentSocket
+        case .other:
+            if draft.agentSocket.isEmpty || draft.agentSocket == RDIdentity.onePasswordAgentSocket {
+                draft.agentSocket = "~/.ssh/agent.sock"
+            }
+        }
+    }
+
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        do {
+            keys = try await SSHAgentKeys.list(socket: draft.agentSocket.isEmpty ? nil : draft.agentSocket)
+            problem = keys.isEmpty ? String(localized: "The agent holds no keys yet.") : nil
+        } catch {
+            keys = []
+            problem = error.localizedDescription
         }
     }
 }
