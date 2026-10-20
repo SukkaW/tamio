@@ -21,6 +21,7 @@ final class MacStatusItem: NSObject, NSPopoverDelegate {
     /// Shows the main window; the item's menu offers it with Quit, which a
     /// Tamio that lives only in the menu bar has nowhere else.
     var onOpenApp: (() -> Void)?
+    var onNewLocalTerminal: (() -> Void)?
 
     private(set) var popover: NSPopover?
     private var outsideClicks: Any?
@@ -66,6 +67,7 @@ final class MacStatusItem: NSObject, NSPopoverDelegate {
         close()
         let menu = NSMenu()
         menu.addItem(withTitle: String(localized: "Open Tamio"), action: #selector(openApp), keyEquivalent: "").target = self
+        menu.addItem(withTitle: String(localized: "New Local Terminal"), action: #selector(newLocalTerminal), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: String(localized: "Quit Tamio"), action: #selector(quit), keyEquivalent: "q").target = self
         // Shown for this click only, so a left click still opens the popover.
@@ -76,6 +78,10 @@ final class MacStatusItem: NSObject, NSPopoverDelegate {
 
     @objc private func openApp() {
         onOpenApp?()
+    }
+
+    @objc private func newLocalTerminal() {
+        onNewLocalTerminal?()
     }
 
     @objc private func quit() {

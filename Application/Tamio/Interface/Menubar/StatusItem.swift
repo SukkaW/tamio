@@ -46,6 +46,10 @@ class MenubarStatusItem: NSObject, Identifiable {
         super.init()
         toggle = { [weak self] in self?.togglePopover() }
         item.onOpenApp = { Mac.openApp?() }
+        item.onNewLocalTerminal = {
+            Mac.openApp?()
+            AppRouter.shared.openLocalTerminal()
+        }
         observeSession()
     }
 

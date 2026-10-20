@@ -86,6 +86,11 @@ struct TamioCommands: Commands {
                 AppRouter.shared.openTerminals()
             }
             .keyboardShortcut("t", modifiers: [.command, .shift])
+            Button("New Local Terminal") {
+                MainWindow.show()
+                AppRouter.shared.openLocalTerminal()
+            }
+            .keyboardShortcut("t", modifiers: .command)
         }
         CommandGroup(after: .sidebar) {
             Button("Home") {

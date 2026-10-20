@@ -57,7 +57,7 @@ struct TerminalPage: View {
         // Closing and duplicating are in the sidebar's menu.
         .pageToolbar(
             primary: context.closed
-                ? ToolbarAction("Reconnect", systemImage: "arrow.clockwise", primary: true) { context.reconnect() }
+                ? ToolbarAction(context.remoteType == .local ? "New Shell" : "Reconnect", systemImage: "arrow.clockwise", primary: true) { context.reconnect() }
                 : nil,
             trailingMetrics: .controlGroup
         ) {
@@ -126,7 +126,7 @@ struct TerminalPage: View {
 
     var disconnectedBanner: some View {
         HStack(spacing: RX.Space.s2) {
-            Text("Connection closed")
+            Text(context.remoteType == .local ? "Shell exited" : "Connection closed")
                 .foregroundStyle(.rxTerminalForeground)
             Spacer()
         }
@@ -159,6 +159,9 @@ private struct TerminalStatusBar: View {
 
     var endpoint: String {
         if let command = context.command { return command.command }
+        if context.remoteType == .local {
+            return "\(NSUserName())@\(Host.current().localizedName ?? "Mac") · \(ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")"
+        }
         return context.machine.getCommand(insertLeadingSSH: false)
     }
 
@@ -200,11 +203,14 @@ extension TerminalManager.Context {
         return navigationTitle
     }
 
-    /// A new terminal on the same server, or with the same Quick Connect command.
+    /// A new terminal on the same server, with the same Quick Connect
+    /// command, or on this Mac.
     @MainActor
     func duplicate() {
         if remoteType == .machine {
             AppRouter.shared.openTerminal(machine: machine.id, force: true)
+        } else if remoteType == .local {
+            AppRouter.shared.openLocalTerminal()
         } else if let command {
             AppRouter.shared.openTerminal(command: command)
         }
@@ -220,9 +226,16 @@ extension TerminalManager.Context {
         return String(localized: "Terminal")
     }
 
-    /// Reconnects with the details from when this session started.
+    /// Reconnects with the details from when this session started. A local
+    /// terminal gets a new shell in its place instead.
+    @MainActor
     func reconnect() {
         guard closed else { return }
+        if remoteType == .local {
+            let fresh = TerminalManager.shared.restartLocalSession(self)
+            if AppRouter.shared.route == .terminal(id) { AppRouter.shared.route = .terminal(fresh.id) }
+            return
+        }
         DispatchQueue.global().async {
             self.putInformation(String(localized: "[i] Reconnecting with the details from when this session started."))
             self.putInformation(String(localized: "    If the server was edited, open a new terminal instead."))

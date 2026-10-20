@@ -13,6 +13,27 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+### Added
+- **A terminal on this Mac.** File › New Local Terminal (⌘T), or New Local
+  Terminal in a menu bar server's menu, opens your login shell in a Tamio
+  terminal, with your Ghostty settings, listed under Sessions as This Mac.
+  When the shell exits, New Shell starts another in its place.
+
+### Fixed
+- **The sidebar slides open smoothly, and the toolbar holds still.** Three
+  things went wrong at once on macOS 26. The search field was the system
+  one, which folded to an icon while the toolbar was briefly short of room
+  mid-slide; it is now Tamio's own, which never folds. The sidebar button
+  was AppKit's, which it moves into the sidebar's part of the toolbar
+  partway through the slide and dropped into the » menu until the slide
+  ended; it is now Tamio's own, in the content's part. And Home's cards were
+  laid out again at every frame, with the OS line measured three ways and
+  the buttons each time, so with live status on a frame took up to 100 ms
+  and the sidebar jumped halfway; the cards now measure those once, and the
+  grid moves cards instead of rebuilding rows. Cards also fill the row, with
+  no space left over at the right. The 0.2.9 change that moved the page by
+  an offset is gone: it made the cards jump instead.
+
 ## [0.2.9] - 2026-10-20
 
 ### Added

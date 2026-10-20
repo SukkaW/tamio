@@ -20,6 +20,13 @@ public protocol TerminalSessionSurface: AnyObject {
     func setupBufferChain(_ callback: @escaping (String) -> Void)
     func setupTitleChain(_ callback: @escaping (String) -> Void)
     func setupSizeChain(_ callback: @escaping (CGSize) -> Void)
+    /// A local shell's end. Surfaces that only show SSH sessions need not
+    /// implement it.
+    func setupCloseChain(_ callback: @escaping () -> Void)
+}
+
+public extension TerminalSessionSurface {
+    func setupCloseChain(_: @escaping () -> Void) {}
 }
 
 open class TerminalContext: ObservableObject, Identifiable, Equatable {
@@ -29,6 +36,7 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
         switch remoteType {
         case .machine: return machine.shortDescription(withComment: false)
         case .command: return command?.command ?? String(localized: "Unknown Command")
+        case .local: return String(localized: "This Mac")
         }
     }
 
@@ -62,6 +70,9 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
     public enum RemoteType {
         case machine
         case command
+        /// A shell on this Mac, run by the terminal itself: no SSH, no shell
+        /// object in use.
+        case local
     }
 
     public let remoteType: RemoteType
@@ -178,6 +189,23 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
         self.surface = surface
         Self.queue.async {
             self.processBootstrap()
+        }
+    }
+
+    /// A terminal with a shell on this Mac. The surface runs the shell; this
+    /// context only gives it a place among the sessions, and closes when the
+    /// shell exits.
+    public init(localSurface surface: TerminalSessionSurface) {
+        machine = RDMachine(remoteAddress: "", remotePort: "", name: String(localized: "This Mac"), group: "Local", associatedIdentity: nil)
+        command = nil
+        remoteType = .local
+        title = String(localized: "This Mac")
+        self.surface = surface
+        surface.setupTitleChain { [weak self] str in
+            self?.title = str
+        }
+        surface.setupCloseChain { [weak self] in
+            self?.continueDecision = false
         }
     }
 
@@ -346,6 +374,12 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
     }
 
     public func processShutdown(exitFromShell: Bool = false) {
+        if remoteType == .local {
+            // Nothing to disconnect: the surface owns the shell, and ends it
+            // with the terminal.
+            continueDecision = false
+            return
+        }
         if exitFromShell {
             putInformation("")
             putInformation(String(localized: "[*] Connection Closed"))

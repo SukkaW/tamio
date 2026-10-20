@@ -7,6 +7,8 @@ final class TerminalCallbacks: @unchecked Sendable {
     private var input: ((String) -> Void)?
     private var title: ((String) -> Void)?
     private var bell: (() -> Void)?
+    /// A local shell's end: Ghostty asks to close the surface.
+    private var close: (() -> Void)?
     private var resize: ((CGSize) -> Void)?
     private var size = CGSize(width: 80, height: 40)
     private var requestedFontSize = 14
@@ -15,6 +17,7 @@ final class TerminalCallbacks: @unchecked Sendable {
     func setInput(_ callback: ((String) -> Void)?) { lock.withLock { input = callback } }
     func setTitle(_ callback: ((String) -> Void)?) { lock.withLock { title = callback } }
     func setBell(_ callback: (() -> Void)?) { lock.withLock { bell = callback } }
+    func setClose(_ callback: (() -> Void)?) { lock.withLock { close = callback } }
     func setResize(_ callback: ((CGSize) -> Void)?) {
         lock.withLock { resize = callback }
         DispatchQueue.main.async { [self] in
@@ -49,6 +52,7 @@ final class TerminalCallbacks: @unchecked Sendable {
 
     @MainActor func receiveTitle(_ value: String) { lock.withLock { title }?(value) }
     @MainActor func receiveBell() { lock.withLock { bell }?() }
+    @MainActor func receiveClose() { lock.withLock { close }?() }
 }
 
 /// NSRemoteShell accepts String input. Hold incomplete UTF-8 suffixes instead of

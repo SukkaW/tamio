@@ -19,6 +19,11 @@ public struct TamioTerminalView {
 
     nonisolated public init() { session = TamioTerminalSession() }
 
+    /// A terminal running a shell on this Mac, Ghostty's own way, instead of
+    /// showing an SSH session's output: the user's login shell in their home
+    /// folder. Input and output never pass through Tamio.
+    nonisolated public init(localShell: Bool) { session = TamioTerminalSession(localShell: localShell) }
+
     nonisolated public func write(_ string: String) { session.output.write(Data(string.utf8)) }
 
     nonisolated public func setTerminalFontSize(with size: Int, preferConfigured: Bool = false) {
@@ -57,6 +62,13 @@ public struct TamioTerminalView {
         session.callbacks.setResize(callback)
         return self
     }
+
+    /// Called when a local shell has exited.
+    @discardableResult
+    nonisolated public func setupCloseChain(callback: (() -> Void)?) -> Self {
+        session.callbacks.setClose(callback)
+        return self
+    }
 }
 
 #if os(macOS)
@@ -77,9 +89,11 @@ final class TamioTerminalSession: @unchecked Sendable {
     let callbacks: TerminalCallbacks
     let backend: InMemoryTerminalSession
     let output: TerminalOutputBuffer
+    let localShell: Bool
     @MainActor private var presentation: TerminalPresentation?
 
-    init() {
+    init(localShell: Bool = false) {
+        self.localShell = localShell
         let callbacks = TerminalCallbacks()
         self.callbacks = callbacks
         let backend = InMemoryTerminalSession(
@@ -125,7 +139,7 @@ final class TamioTerminalSession: @unchecked Sendable {
 @MainActor
 private final class TerminalPresentation: NSObject, TerminalSurfaceTitleDelegate,
     TerminalSurfaceBellDelegate, TerminalSurfaceLifecycleDelegate,
-    TerminalSurfaceClipboardConfirmationDelegate
+    TerminalSurfaceCloseDelegate, TerminalSurfaceClipboardConfirmationDelegate
 {
     let view: PlatformTerminalView
     private let callbacks: TerminalCallbacks
@@ -145,10 +159,17 @@ private final class TerminalPresentation: NSObject, TerminalSurfaceTitleDelegate
         NotificationCenter.default.addObserver(self, selector: #selector(configurationDidApply), name: TamioTerminalConfiguration.didApply, object: nil)
         view.delegate = self
         view.controller = TamioTerminalConfiguration.controller
-        // Never use the default .exec backend: SSH remains owned by Tamio.
-        view.configuration = TerminalSurfaceOptions(
-            backend: .inMemory(session.backend), fontSize: Float(Self.surfaceFontSize(TamioTerminalConfiguration.appliedFontSize ?? Double(callbacks.fontSize)))
-        )
+        let fontSize = Float(Self.surfaceFontSize(TamioTerminalConfiguration.appliedFontSize ?? Double(callbacks.fontSize)))
+        if session.localShell {
+            // Ghostty runs the user's shell itself, in a pty of its own, and
+            // asks to close once it exits (no wait, so that is at once).
+            view.configuration = TerminalSurfaceOptions(
+                backend: .exec, fontSize: fontSize, workingDirectory: NSHomeDirectory(), waitAfterCommand: false
+            )
+        } else {
+            // Never the .exec backend for a server: SSH remains owned by Tamio.
+            view.configuration = TerminalSurfaceOptions(backend: .inMemory(session.backend), fontSize: fontSize)
+        }
     }
 
     func applyFontSize(preferConfigured: Bool) {
@@ -189,6 +210,7 @@ private final class TerminalPresentation: NSObject, TerminalSurfaceTitleDelegate
     func terminalDidDetachSurface() { output.setAttached(false) }
     func terminalDidChangeTitle(_ title: String) { callbacks.receiveTitle(title) }
     func terminalDidRingBell() { callbacks.receiveBell() }
+    func terminalDidClose(processAlive _: Bool) { callbacks.receiveClose() }
 
     func terminalDidRequestClipboardConfirmation(_ request: TerminalClipboardConfirmationRequest) {
         // A remote program never gets to read or replace the clipboard (OSC 52).

@@ -133,6 +133,12 @@ final class AppRouter: ObservableObject {
         }
     }
 
+    /// A terminal with a shell on this Mac, shown at once: the user asked for it.
+    func openLocalTerminal() {
+        let context = TerminalManager.shared.createLocalSession()
+        route = .terminal(context.id)
+    }
+
     func openTerminal(command: SSHCommandReader) {
         let context = TerminalManager.shared.createSession(withCommand: command)
         if opensAutomatically { route = .terminal(context.id) }

@@ -56,6 +56,29 @@ class TerminalManager: ObservableObject {
         return context
     }
 
+    /// A terminal with a shell on this Mac (#10): the user's login shell,
+    /// run by the terminal itself.
+    @discardableResult
+    func createLocalSession() -> Context {
+        let context = Context(localShell: ())
+        sessionContexts.append(context)
+        return context
+    }
+
+    /// A new shell in the place of a local terminal whose shell has exited:
+    /// the surface cannot start another in the same one.
+    @discardableResult
+    func restartLocalSession(_ context: Context) -> Context {
+        let fresh = Context(localShell: ())
+        if let index = sessionContexts.firstIndex(where: { $0.id == context.id }) {
+            sessionContexts[index] = fresh
+        } else {
+            sessionContexts.append(fresh)
+        }
+        context.processShutdown()
+        return fresh
+    }
+
     func sessionAlive(forContext contextId: Context.ID) -> Bool {
         !(
             sessionContexts

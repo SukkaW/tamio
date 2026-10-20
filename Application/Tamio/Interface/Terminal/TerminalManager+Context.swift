@@ -12,7 +12,11 @@ import TamioTerminal
 
 /// Bridges the shared terminal session core to the platform renderer.
 final class TerminalSurfaceBridge: TerminalSessionSurface {
-    let termInterface = TamioTerminalView()
+    let termInterface: TamioTerminalView
+
+    init(localShell: Bool = false) {
+        termInterface = TamioTerminalView(localShell: localShell)
+    }
 
     func write(_ string: String) {
         termInterface.write(string)
@@ -33,19 +37,31 @@ final class TerminalSurfaceBridge: TerminalSessionSurface {
     func setupSizeChain(_ callback: @escaping (CGSize) -> Void) {
         termInterface.setupSizeChain(callback: callback)
     }
+
+    func setupCloseChain(_ callback: @escaping () -> Void) {
+        termInterface.setupCloseChain(callback: callback)
+    }
 }
 
 extension TerminalManager {
     final class Context: TamioModule.TerminalContext {
-        private let surfaceBridge = TerminalSurfaceBridge()
+        private let surfaceBridge: TerminalSurfaceBridge
         var termInterface: TamioTerminalView { surfaceBridge.termInterface }
 
         init(machine: RDMachine) {
+            surfaceBridge = TerminalSurfaceBridge()
             super.init(machine: machine, surface: surfaceBridge)
         }
 
         init(command: SSHCommandReader) {
+            surfaceBridge = TerminalSurfaceBridge()
             super.init(command: command, surface: surfaceBridge)
+        }
+
+        /// A shell on this Mac.
+        init(localShell: Void) {
+            surfaceBridge = TerminalSurfaceBridge(localShell: true)
+            super.init(localSurface: surfaceBridge)
         }
     }
 }
