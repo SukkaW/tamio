@@ -109,11 +109,23 @@ public struct AES: Sendable {
         }
     #endif
 
+    /// The keychain service and account the master key is kept under. A
+    /// debug build launched with TAMIO_ISOLATED_KEY keeps a key of its own: a
+    /// benchmark or UI-test copy must never read, replace or remove the key
+    /// the user's own Tamio encrypts their servers and keys with.
+    public static var masterKeyNames: (service: String, account: String) {
+        #if DEBUG
+            if ProcessInfo.processInfo.environment["TAMIO_ISOLATED_KEY"] != nil {
+                return ("sb.moe.tamio.isolated.kcAccess", "sb.moe.tamio.isolated.MasterCrypto")
+            }
+        #endif
+        return ("sb.moe.tamio.kcAccess", "sb.moe.tamio.MasterCrypto")
+    }
+
     /// A random master key persisted in the keychain, with bridges for the
     /// keys earlier builds kept elsewhere.
     private static func makeKeychainEngine() -> AES {
-        let keychainServiceID = "sb.moe.tamio.kcAccess"
-        let masterKeyID = "sb.moe.tamio.MasterCrypto"
+        let (keychainServiceID, masterKeyID) = masterKeyNames
         let keychain = Keychain(service: keychainServiceID)
             .label("Tamio Master Crypto Key")
             .comment("Tamio requires a master crypto key to access your encrypted data on disk and protects your accounts")

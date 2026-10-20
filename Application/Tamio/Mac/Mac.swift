@@ -186,8 +186,7 @@ enum Mac {
     /// Lets the store find the master key the AppKit builds of Tamio kept in
     /// the login keychain. Call before `TamioStore.shared` is first used.
     static func installLegacyKeyStore() {
-        let service = "sb.moe.tamio.kcAccess"
-        let account = "sb.moe.tamio.MasterCrypto"
+        let (service, account) = AES.masterKeyNames
         AES.legacyKeyStore = LegacyKeyStore(
             read: { readLoginKeychain(service: service, account: account) },
             write: { key in writeLoginKeychain(service: service, account: account, label: "Tamio Master Crypto Key", value: key) }

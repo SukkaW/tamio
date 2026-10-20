@@ -9,6 +9,7 @@
 //
 
 #if DEBUG
+    import MachineStatusView
     import NSRemoteShell
     import TamioModule
     import TamioTerminal
@@ -35,6 +36,9 @@ import SwiftUI
             if ProcessInfo.processInfo.environment["TAMIO_PREVIEW_FILES"] != nil {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { Task { await previewFiles() } }
             }
+            if let pages = ProcessInfo.processInfo.environment["TAMIO_BENCH_SIDEBAR"] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { Task { await sidebar(pages) } }
+            }
             if ProcessInfo.processInfo.environment["TAMIO_BENCH_SETTINGS"] != nil {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { Task { await settings() } }
             }
@@ -48,7 +52,7 @@ import SwiftUI
         /// The longest single stretch of work in the last `settle`: the hitch.
         static var longest = 0.0
 
-        static func settle(_ action: () -> Void) async -> Double {
+        static func settle(for seconds: Double = 0.4, _ action: () -> Void) async -> Double {
             let load = RunLoopLoad()
             let activities = CFRunLoopActivity.afterWaiting.rawValue | CFRunLoopActivity.beforeWaiting.rawValue
             let observer = CFRunLoopObserverCreateWithHandler(nil, activities, true, CFIndex.max) { _, activity in
@@ -57,10 +61,97 @@ import SwiftUI
             }
             CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
             action()
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             CFRunLoopRemoveObserver(CFRunLoopGetMain(), observer, .commonModes)
             longest = load.stretch * 1000
             return load.busy * 1000
+        }
+
+        /// Collapses and expands the sidebar the way its toolbar button does,
+        /// on each page named in TAMIO_BENCH_SIDEBAR ("home,servers,settings,
+        /// terminal"). TAMIO_BENCH_SERVERS=<n> first adds n servers no one
+        /// answers at (for a copy of the app with its own store only), and
+        /// TAMIO_BENCH_TERMINALS=<n> opens n terminals to them.
+        static func sidebar(_ pages: String) async {
+            let environment = ProcessInfo.processInfo.environment
+            let servers = Int(environment["TAMIO_BENCH_SERVERS"] ?? "") ?? 0
+            if servers > 0, TamioStore.shared.machineGroup.machines.isEmpty {
+                LiveStatusCenter.shared.isEnabled = false
+                for index in 0 ..< servers {
+                    TamioStore.shared.machineGroup.insert(RDMachine(
+                        remoteAddress: "203.0.113.\(index + 1)", remotePort: "22", name: "bench-\(index + 1)", group: index % 3 == 0 ? "Web" : "DB"
+                    ))
+                }
+            }
+            for machine in TamioStore.shared.machineGroup.machines.prefix(Int(environment["TAMIO_BENCH_TERMINALS"] ?? "") ?? 0) {
+                TerminalManager.shared.createSession(withMachineID: machine.id)
+            }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            // The toggle goes to the key window's responder chain.
+            MainWindow.show()
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            let router = AppRouter.shared
+            for page in pages.split(separator: ",").map(String.init) {
+                switch page {
+                case "servers": router.route = .servers
+                // Nothing in the content column, not even a page's toolbar.
+                case "blank": router.route = .terminal(UUID())
+                case "settings": router.route = .settings
+                case "terminal":
+                    guard let context = TerminalManager.shared.sessionContexts.first else { continue }
+                    router.route = .terminal(context.id)
+                default: router.route = .home
+                }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                var collapse: [Double] = [], expand: [Double] = []
+                var collapseHitch: [Double] = [], expandHitch: [Double] = []
+                for _ in 0 ..< 5 {
+                    collapse.append(await settle(for: 0.8) { toggleSidebar() })
+                    collapseHitch.append(longest)
+                    let collapsed = sidebarWidth()
+                    expand.append(await settle(for: 0.8) { toggleSidebar() })
+                    expandHitch.append(longest)
+                    NSLog("BENCH %@ sidebar width collapsed %.0f expanded %.0f", page, collapsed, sidebarWidth())
+                }
+                report("\(page) collapse busy", collapse)
+                report("\(page) collapse hitch", collapseHitch)
+                report("\(page) expand busy", expand)
+                report("\(page) expand hitch", expandHitch)
+            }
+            NSLog("BENCH done")
+        }
+
+        /// The width of the split view's first pane, 0 when the sidebar is away.
+        private static func sidebarWidth() -> CGFloat {
+            func split(in view: NSView) -> NSSplitView? {
+                if let split = view as? NSSplitView { return split }
+                for child in view.subviews { if let found = split(in: child) { return found } }
+                return nil
+            }
+            guard let content = Mac.mainWindow?.contentView, let split = split(in: content),
+                  let first = split.arrangedSubviews.first
+            else { return -1 }
+            return split.isSubviewCollapsed(first) ? 0 : first.frame.width
+        }
+
+        private static func logPanes(_ delay: Double) {
+            func split(in view: NSView) -> NSSplitView? {
+                if let split = view as? NSSplitView { return split }
+                for child in view.subviews { if let found = split(in: child) { return found } }
+                return nil
+            }
+            guard let content = Mac.mainWindow?.contentView, let split = split(in: content) else { return }
+            let panes = split.arrangedSubviews.map { String(format: "x %.0f w %.0f", $0.frame.minX, $0.frame.width) }.joined(separator: " | ")
+            NSLog("BENCH panes +%.2fs window %.0f: %@", delay, Mac.mainWindow?.frame.width ?? 0, panes)
+        }
+
+        private static func toggleSidebar() {
+            NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
+            if ProcessInfo.processInfo.environment["TAMIO_BENCH_PANES"] != nil {
+                for delay in [0.03, 0.08, 0.15, 0.4] {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { MainActor.assumeIsolated { logPanes(delay) } }
+                }
+            }
         }
 
         static func report(_ name: String, _ samples: [Double]) {
