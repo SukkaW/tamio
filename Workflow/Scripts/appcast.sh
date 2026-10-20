@@ -11,9 +11,9 @@
 # the SPARKLE_PRIVATE_KEY secret does).
 #
 # The update window shows the version's notes: its section of CHANGELOG.md
-# (release-notes.sh) as plain text (plain-notes.py): headings in capitals,
-# bullets, no marks. Chosen when the app was Mac Catalyst, where Sparkle
-# printed HTML and Markdown notes as raw markup; it reads well natively too.
+# (release-notes.sh) as HTML, which Sparkle shows in a web view. cmark, the
+# reference CommonMark renderer, makes it, so the notes read as they do on
+# GitHub: headings, bold leads, and bullets that wrap as one item.
 
 set -euo pipefail
 
@@ -39,7 +39,8 @@ rmdir "$mount"
 attributes="$("$ROOT_DIR/External/Sparkle/bin/sign_update" --ed-key-file "$SPARKLE_KEY_FILE" "$IMAGE")"
 [[ "$attributes" == *edSignature=* ]] || { printf 'sign_update failed.\n' >&2; exit 1; }
 
-notes="$(bash "$ROOT_DIR/Workflow/Scripts/release-notes.sh" "$short" | /usr/bin/python3 "$ROOT_DIR/Workflow/Scripts/plain-notes.py")"
+command -v cmark >/dev/null || brew install cmark >&2
+notes="$(bash "$ROOT_DIR/Workflow/Scripts/release-notes.sh" "$short" | cmark)"
 # Nothing in the notes may close the CDATA section they go in.
 notes="${notes//]]>/]] >}"
 
@@ -58,7 +59,7 @@ cat <<XML
       <sparkle:version>$build</sparkle:version>
       <sparkle:shortVersionString>$short</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>$minimum</sparkle:minimumSystemVersion>
-      <description sparkle:format="plain-text"><![CDATA[$notes]]></description>
+      <description><![CDATA[$notes]]></description>
       <sparkle:fullReleaseNotesLink>https://github.com/$REPO/releases/tag/$TAG</sparkle:fullReleaseNotesLink>
       <enclosure url="https://github.com/$REPO/releases/download/$TAG/$name" type="application/octet-stream" $attributes />
     </item>
