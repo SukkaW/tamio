@@ -13,6 +13,8 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-10-20
+
 ### Added
 - **A terminal on this Mac.** File › New Local Terminal (⌘T), or New Local
   Terminal in a menu bar server's menu, opens your login shell in a Tamio
