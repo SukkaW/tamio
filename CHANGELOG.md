@@ -13,6 +13,8 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-10-20
+
 ### Added
 - **Sign in with keys an SSH agent holds.** An identity can now use an SSH
   agent instead of a stored key: the system agent, 1Password's, or any other
