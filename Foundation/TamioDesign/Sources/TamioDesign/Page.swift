@@ -85,6 +85,21 @@ public struct EmptyStateView: View {
         self.action = action
     }
 
+    @_disfavoredOverload
+    public init<S: StringProtocol, M: StringProtocol>(
+        _ title: S,
+        systemImage: String,
+        message: M,
+        actionTitle: LocalizedStringKey? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.title = Text(verbatim: String(title))
+        self.systemImage = systemImage
+        self.message = Text(verbatim: String(message))
+        self.actionTitle = actionTitle.map { Text($0) }
+        self.action = action
+    }
+
     public var body: some View {
         VStack(spacing: RX.Space.s3) {
             Image(systemName: systemImage)

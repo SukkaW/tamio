@@ -6,6 +6,7 @@
 //
 
 #import "GenericNetworking.h"
+#import <TargetConditionals.h>
 
 /*
  waits for a non-blocking connect() to settle on a socket
@@ -49,6 +50,7 @@ static BOOL NSRWaitForSocketWritable(int sock, double timeoutSeconds) {
     return socketError == 0;
 }
 
+#if TARGET_OS_OSX
 /// The running subprocess and stderr reader for one proxy-command socket.
 /// The child's stdin and stdout are the other end of libssh2's AF_UNIX
 /// socketpair, so bytes flow between libssh2 and the child in the kernel with
@@ -154,6 +156,8 @@ static BOOL NSRWaitForSocketWritable(int sock, double timeoutSeconds) {
 }
 
 @end
+
+#endif // TARGET_OS_OSX
 
 @implementation GenericNetworking
 
@@ -404,6 +408,7 @@ static NSString *NSRProxyCommandPath(void) {
     return [parts componentsJoinedByString:@":"];
 }
 
+#if TARGET_OS_OSX
 static NSMutableDictionary<NSNumber *, NSRProxyTask *> *NSRProxyTasks(void) {
     static NSMutableDictionary<NSNumber *, NSRProxyTask *> *tasks = nil;
     static dispatch_once_t onceToken;
@@ -412,6 +417,29 @@ static NSMutableDictionary<NSNumber *, NSRProxyTask *> *NSRProxyTasks(void) {
     });
     return tasks;
 }
+
+#endif
+#if !TARGET_OS_OSX
++ (int)createSocketWithProxyCommand:(NSString *)command
+                         targetHost:(NSString *)targetHost
+                         targetPort:(NSNumber *)targetPort
+                            failure:(NSString **)failure
+{
+    if (failure) { *failure = @"Proxy commands are not available on iOS."; }
+    return 0;
+}
+
++ (nullable NSString *)proxyFailureForSocket:(int)socketDescriptor {
+    return nil;
+}
+
++ (void)destroyNativeSocket:(int)socketDescriptor {
+    if (socketDescriptor > 0) {
+        NSRLog(@"closing socket fd %d", socketDescriptor);
+        close(socketDescriptor);
+    }
+}
+#else
 
 + (int)createSocketWithProxyCommand:(NSString *)command
                          targetHost:(NSString *)targetHost
@@ -506,6 +534,8 @@ static NSMutableDictionary<NSNumber *, NSRProxyTask *> *NSRProxyTasks(void) {
         [proxy stop];
     }
 }
+
+#endif
 
 + (NSString*)getResolvedIpAddressWith:(int)socket {
     if (!socket) { return @""; }

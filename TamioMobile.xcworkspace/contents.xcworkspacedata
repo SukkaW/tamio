@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group:Application/TamioMobile/TamioMobile.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/TamioModule">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/MachineStatus">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/MachineStatusView">
+   </FileRef>
+   <FileRef
+      location = "group:External/CodeMirrorUI">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/Keychain">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/PropertyWrapper">
+   </FileRef>
+   <FileRef
+      location = "group:External/NSRemoteShell">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/SPIndicator">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/StripedTextTable">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/SymbolPicker">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/XMLCoder">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/TamioTerminal">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/TamioDesign">
+   </FileRef>
+   <FileRef
+      location = "group:Foundation/TamioEditor">
+   </FileRef>
+</Workspace>

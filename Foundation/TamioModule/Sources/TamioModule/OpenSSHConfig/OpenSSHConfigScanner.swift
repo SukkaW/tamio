@@ -293,7 +293,7 @@ public enum OpenSSHConfigScanner {
                 guard !absolute.hasPrefix("~") else { throw syntaxError(location) }
             } else if !absolute.hasPrefix("/") {
                 // OpenSSH resolves user-config Includes against ~/.ssh, not the parent file.
-                absolute = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".ssh").appendingPathComponent(absolute).path
+                absolute = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".ssh").appendingPathComponent(absolute).path
             }
             let components = absolute.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
             var paths = ["/"]
