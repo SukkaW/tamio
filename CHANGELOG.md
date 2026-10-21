@@ -13,6 +13,11 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+### Fixed
+- **Load from File… did nothing in New SSH Key.** The file picker is now
+  attached to the sheet that is open instead of the window behind it, so it
+  appears. (#12)
+
 ## [0.2.11] - 2026-10-20
 
 ### Fixed

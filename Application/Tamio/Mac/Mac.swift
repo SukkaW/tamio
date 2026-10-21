@@ -99,7 +99,14 @@ enum Mac {
     // MARK: Alerts and panels
 
     private static var sheetParent: NSWindow? {
-        MainActor.assumeIsolated { mainWindow.flatMap { $0.isVisible ? $0 : nil } }
+        // Attach to the topmost sheet already open: a window that has a sheet
+        // cannot take a second one, so a panel opened from a sheet (Load from
+        // File… in New SSH Key) would otherwise never appear.
+        MainActor.assumeIsolated {
+            guard var window = mainWindow, window.isVisible else { return nil }
+            while let sheet = window.attachedSheet { window = sheet }
+            return window
+        }
     }
 
     /// An alert, as a sheet on the main window when there is one. `buttons`
