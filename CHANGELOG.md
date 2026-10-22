@@ -13,6 +13,8 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.13] - 2026-10-21
+
 ### Added
 - **A terminal reconnects by itself.** A server's terminal whose connection
   drops, or that could not connect, tries again three times, ten seconds
