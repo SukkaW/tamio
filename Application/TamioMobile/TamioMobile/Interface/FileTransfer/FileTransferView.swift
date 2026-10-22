@@ -417,15 +417,23 @@ extension FileTransferContext {
 
 /// Bridges TamioModule's shared file-transfer core to UIKit UI.
 final class IOSFileTransferUIHandler: FileTransferUIHandler {
+    // The contract calls these on the main thread; the class itself is
+    // not MainActor because it witnesses a nonisolated protocol.
     func presentError(_ message: String) {
-        UIBridge.presentError(with: message)
+        MainActor.assumeIsolated { UIBridge.presentError(with: message) }
     }
 
     func requiresConfirmation(_ message: String, completion: @escaping (Bool) -> Void) {
-        UIBridge.requiresConfirmation(message: message, confirmation: completion)
+        nonisolated(unsafe) let completion = completion
+        MainActor.assumeIsolated { UIBridge.requiresConfirmation(message: message, confirmation: completion) }
     }
 
     func autoOpenInterface(_ context: FileTransferContext) {
+        nonisolated(unsafe) let context = context
+        MainActor.assumeIsolated { present(context) }
+    }
+
+    @MainActor private func present(_ context: FileTransferContext) {
         let host = UIHostingController(
             rootView: FileTransferContext.DefaultPresent(context: context)
         )

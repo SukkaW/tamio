@@ -10,6 +10,7 @@ import UIKit
 
 // onMainThread(delay:run:) is provided by TamioModule.
 
+@MainActor
 enum UIBridge {
     static func sendPasteboard(str: String) {
         presentSuccess(with: "Pasteboard Sent")

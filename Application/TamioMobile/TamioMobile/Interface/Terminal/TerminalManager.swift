@@ -8,6 +8,7 @@
 import TamioModule
 import SwiftUI
 
+@MainActor
 class TerminalManager: ObservableObject {
     static let shared = TerminalManager()
 

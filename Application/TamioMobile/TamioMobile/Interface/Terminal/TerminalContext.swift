@@ -66,6 +66,13 @@ extension TerminalContext {
 /// Bridges TamioModule's shared terminal core to UIKit UI.
 final class IOSTerminalUIHandler: TerminalUIHandler {
     func autoOpenInterface(_ context: TamioModule.TerminalContext) {
+        // Called on the main thread, as the protocol says; the context is
+        // passed through as a Sendable so the compiler lets it cross.
+        nonisolated(unsafe) let context = context
+        MainActor.assumeIsolated { present(context) }
+    }
+
+    @MainActor private func present(_ context: TamioModule.TerminalContext) {
         guard let context = context as? TerminalContext else { return }
         let host = UIHostingController(
             rootView: TerminalContext.DefaultPresent(context: context)

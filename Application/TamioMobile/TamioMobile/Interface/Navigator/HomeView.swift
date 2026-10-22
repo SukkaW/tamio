@@ -173,11 +173,12 @@ struct QuickConnectCard: View {
     }
 }
 
-/// A server at a glance: name, address, state, CPU and memory while monitored.
+/// A server at a glance: name, address, and its live CPU, memory and root
+/// disk, from its open monitor or the quiet session behind the cards.
 struct ServerTile: View {
     let machine: RDMachine.ID
     @EnvironmentObject var store: TamioStore
-    @ObservedObject var monitors = MonitorCenter.shared
+    @ObservedObject var live = LiveStatusCenter.shared
 
     var body: some View {
         let read = store.machineGroup[machine]
@@ -198,7 +199,7 @@ struct ServerTile: View {
                     }
                     Spacer()
                 }
-                if let session = monitors.session(for: machine) {
+                if let session = live.session(for: machine) {
                     LiveTileBars(session: session)
                 } else {
                     HStack {
@@ -220,11 +221,33 @@ struct ServerTile: View {
 private struct LiveTileBars: View {
     @ObservedObject var session: MonitorSession
     var body: some View {
-        let cpu = Double(session.status.processor.summary.sumUsed)
-        let memory = session.status.memoryUsedPercent
-        VStack(spacing: RX.Space.s2) {
-            bar("CPU", cpu, .rxAccent)
-            bar("Memory", memory, .rxSeries2)
+        let status = session.status
+        if status.hasData {
+            let root = status.fileSystem.elements.first { $0.mountPoint == "/" }
+            VStack(spacing: RX.Space.s2) {
+                bar("CPU", Double(status.processor.summary.sumUsed), .rxAccent)
+                bar("Memory", status.memoryUsedPercent, .rxSeries2)
+                if let root {
+                    bar("Disk", Double(root.percent), .rxWarning)
+                }
+            }
+        } else {
+            HStack {
+                CapsLabel(session.phase == .connecting ? "Connecting" : "Status")
+                Spacer()
+                Text(sessionState)
+                    .font(.footnote)
+                    .foregroundStyle(.rxInkSecondary)
+            }
+        }
+    }
+
+    var sessionState: String {
+        switch session.phase {
+        case .connecting: return String(localized: "Connecting…")
+        case .connected: return String(localized: "Reading…")
+        case let .failed(message): return message
+        case .closed: return String(localized: "Closed")
         }
     }
 

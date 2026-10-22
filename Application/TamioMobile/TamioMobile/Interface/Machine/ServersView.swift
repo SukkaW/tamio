@@ -118,7 +118,7 @@ struct ServerListRow: View {
     let machine: RDMachine.ID
     let edit: () -> Void
     @EnvironmentObject var store: TamioStore
-    @ObservedObject var monitors = MonitorCenter.shared
+    @ObservedObject var live = LiveStatusCenter.shared
 
     var body: some View {
         let read = store.machineGroup[machine]
@@ -136,7 +136,7 @@ struct ServerListRow: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                if let session = monitors.session(for: machine) {
+                if let session = live.session(for: machine), session.status.hasData {
                     ServerRowState(session: session)
                 } else {
                     Text(RXFormat.relative(read.lastConnection))
@@ -161,15 +161,20 @@ struct ServerListRow: View {
     }
 }
 
+/// CPU and memory, and the traffic of the physical interfaces, as the Mac's
+/// Servers table shows them.
 private struct ServerRowState: View {
     @ObservedObject var session: MonitorSession
     var body: some View {
+        let status = session.status
+        let physical = status.network.elements.filter { !NetworkFilter.isVirtual($0.device) }
         VStack(alignment: .trailing, spacing: 2) {
-            if session.status.hasData {
-                Text("CPU \(RXFormat.percent(Double(session.status.processor.summary.sumUsed)))%")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.rxInkSecondary)
-            }
+            Text("CPU \(RXFormat.percent(Double(status.processor.summary.sumUsed)))% · Mem \(RXFormat.percent(status.memoryUsedPercent))%")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.rxInkSecondary)
+            Text("↑ \(RXFormat.rateString(Double(physical.map(\.txBytesPerSec).reduce(0, +)))) ↓ \(RXFormat.rateString(Double(physical.map(\.rxBytesPerSec).reduce(0, +))))")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.rxInkTertiary)
         }
     }
 }
@@ -274,7 +279,7 @@ enum ServerActions {
             let machines = await TamioUtil.selectMachine()
             // Terminals present themselves through PresentationQueue once
             // connected, so the picker sheet still animating out is fine.
-            onMainThread {
+            await MainActor.run {
                 for machine in machines {
                     TerminalManager.shared.begin(for: machine, force: true)
                 }

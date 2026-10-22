@@ -329,14 +329,6 @@ struct StatusSlots: View {
 
 }
 
-enum NetworkFilter {
-    /// Loopback, containers, bridges and tunnels: not the server's own traffic.
-    static func isVirtual(_ device: String) -> Bool {
-        let prefixes = ["lo", "docker", "veth", "br-", "virbr", "vmnet", "tun", "tap", "wg", "utun", "gif", "stf", "anpi", "awdl", "llw", "bridge", "cni", "flannel", "cali", "kube"]
-        return prefixes.contains { device.hasPrefix($0) }
-    }
-}
-
 // MARK: - Gauges
 
 /// "50 K", "2.6 M", "356 G": ServerCat's short byte counts.

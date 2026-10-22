@@ -180,3 +180,13 @@ public final class LiveStatusCenter: ObservableObject {
         }
     }
 }
+
+/// Which interfaces carry the server's own traffic, for the rates the cards
+/// and tables add up.
+public enum NetworkFilter {
+    /// Loopback, containers, bridges and tunnels: not the server's own traffic.
+    public static func isVirtual(_ device: String) -> Bool {
+        let prefixes = ["lo", "docker", "veth", "br-", "virbr", "vmnet", "tun", "tap", "wg", "utun", "gif", "stf", "anpi", "awdl", "llw", "bridge", "cni", "flannel", "cali", "kube"]
+        return prefixes.contains { device.hasPrefix($0) }
+    }
+}

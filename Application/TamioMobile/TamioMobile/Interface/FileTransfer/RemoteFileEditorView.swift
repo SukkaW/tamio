@@ -133,6 +133,9 @@ struct RemoteFileEditorView: View {
 
     private func load() async {
         phase = .loading
+        // The transfer context serialises its own SFTP calls; the view only
+        // hands it the path, so the hop off the main actor is safe.
+        nonisolated(unsafe) let context = context
         do {
             let loaded = try await context.readText(at: remotePath)
             text = loaded
@@ -150,6 +153,7 @@ struct RemoteFileEditorView: View {
         let snapshot = text
         saving = true
         defer { saving = false }
+        nonisolated(unsafe) let context = context
         do {
             try await context.writeText(snapshot, to: remotePath)
             savedText = snapshot

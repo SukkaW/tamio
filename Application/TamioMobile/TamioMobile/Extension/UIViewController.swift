@@ -44,6 +44,7 @@ extension UIViewController {
 /// go up immediately when the way is clear, are replayed when a window
 /// becomes key and on a short poll while a transition finishes, and a
 /// request that outlives its timeout is logged rather than dropped quietly.
+@MainActor
 enum PresentationQueue {
     private struct Request {
         let controller: UIViewController

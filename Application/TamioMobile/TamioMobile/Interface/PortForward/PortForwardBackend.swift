@@ -10,6 +10,7 @@ import Combine
 import Foundation
 import TamioModule
 
+@MainActor
 class PortForwardBackend: ObservableObject {
     static let shared = PortForwardBackend()
 

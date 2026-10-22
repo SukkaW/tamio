@@ -6,13 +6,15 @@
 //
 
 import CodeEditorUI
-import TamioModule
+import MachineStatusView
 import SwiftUI
+import TamioModule
 import TamioTerminal
 
 @main
 struct TamioMobileApp: App {
     @StateObject private var store = TamioStore.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         #if DEBUG
@@ -25,10 +27,47 @@ struct TamioMobileApp: App {
 
         _ = LogRedirect.shared
         _ = TamioStore.shared
+        CloudSync.shared.preferences = SyncedSettings.all
         CloudSync.shared.start()
+        // Every server card shows live status without opening a monitor.
+        LiveStatusCenter.shared.start()
 
+        #if DEBUG
+            Self.addPreviewServer()
+        #endif
         NSLog("static main completed")
     }
+
+    #if DEBUG
+        /// A debug build started with TAMIO_PREVIEW_SERVER=user@host:port and
+        /// TAMIO_PREVIEW_KEY=<private key path> has that server, with that
+        /// key, in its store: the simulator can then be run against a
+        /// throwaway sshd without typing into it.
+        private static func addPreviewServer() {
+            let environment = ProcessInfo.processInfo.environment
+            guard let server = environment["TAMIO_PREVIEW_SERVER"], let keyPath = environment["TAMIO_PREVIEW_KEY"],
+                  let command = SSHCommandReader(command: "ssh \(server)")
+            else { return }
+            let store = TamioStore.shared
+            guard !store.machineGroup.machines.contains(where: { $0.remoteAddress == command.remoteAddress && $0.remotePort == command.remotePort }),
+                  let privateKey = try? String(contentsOfFile: keyPath, encoding: .utf8)
+            else { return }
+            let publicKey = (try? String(contentsOfFile: keyPath + ".pub", encoding: .utf8)) ?? ""
+            var identity = RDIdentity(privateKey: privateKey, publicKey: publicKey, authenticAutomatically: true)
+            identity.name = "Preview key"
+            var machine = RDMachine(remoteAddress: command.remoteAddress, remotePort: command.remotePort, name: "Preview server")
+            machine.username = command.username
+            machine.associatedIdentity = identity.id.uuidString
+            store.identityGroup.insert(identity)
+            store.machineGroup.insert(machine)
+            // TAMIO_PREVIEW_OPEN=terminal opens its terminal once the window is up.
+            if environment["TAMIO_PREVIEW_OPEN"] == "terminal" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    TerminalManager.shared.begin(for: machine.id)
+                }
+            }
+        }
+    #endif
 
     var body: some Scene {
         WindowGroup {
@@ -58,6 +97,11 @@ struct TamioMobileApp: App {
                 }
                 .onChange(of: store.licenseAgreed) { _ in
                     checkAgreement()
+                }
+                // The quiet status sessions run only while the app is on
+                // screen; in the background iOS would cut them off anyway.
+                .onChange(of: scenePhase) { phase in
+                    LiveStatusCenter.shared.setWindowVisible(phase == .active)
                 }
         }
     }

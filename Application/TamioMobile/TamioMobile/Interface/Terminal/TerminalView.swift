@@ -59,9 +59,26 @@ struct TerminalView: View {
             debugPrint("set interface token \(interfaceToken)")
             context.interfaceToken = interfaceToken
         }
-        .navigationTitle(context.navigationTitle)
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // The name alone fits a phone's bar; the address goes under it,
+            // smaller rather than cut off.
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 1) {
+                    Text(title)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.rxInkSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
+                }
+            }
             ToolbarItemGroup(placement: .primaryAction) {
                 if context.closed {
                     Button {
@@ -81,6 +98,25 @@ struct TerminalView: View {
                 }
             }
         }
+    }
+
+    /// The server's name, or the command typed into Quick Connect.
+    var title: String {
+        switch context.remoteType {
+        case .machine: return context.machine.name
+        default: return context.navigationTitle
+        }
+    }
+
+    /// user@host, with the port when it is not 22.
+    var subtitle: String {
+        guard context.remoteType == .machine else { return "" }
+        let machine = context.machine
+        let identity = machine.associatedIdentity.flatMap(UUID.init(uuidString:)).map { TamioStore.shared.identityGroup[$0] }
+        let user = machine.loginUsername(with: identity)
+        var text = user.isEmpty ? machine.remoteAddress : "\(user)@\(machine.remoteAddress)"
+        if machine.remotePort != "22" { text += ":\(machine.remotePort)" }
+        return text
     }
 
     func closeSession() {

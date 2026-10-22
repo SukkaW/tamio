@@ -7,7 +7,8 @@
 
 import SwiftUI
 
-class LogRedirect {
+/// Written from whichever thread logs; the handle serialises the writes.
+final class LogRedirect: @unchecked Sendable {
     static let shared = LogRedirect()
 
     var handler: FileHandle?

@@ -1,0 +1,96 @@
+# The iOS and iPadOS app: SwiftUI on UIKit, sharing TamioModule, the Ghostty
+# terminal and the status views with the Mac app. Regenerate the project
+# with: xcodegen generate
+name: TamioMobile
+options:
+  developmentLanguage: en
+  knownRegions:
+    - Base
+    - en
+    - zh-Hans
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+packages:
+  TamioModule: { path: ../../Foundation/TamioModule }
+  TamioTerminal: { path: ../../Foundation/TamioTerminal }
+  MachineStatus: { path: ../../Foundation/MachineStatus }
+  MachineStatusView: { path: ../../Foundation/MachineStatusView }
+  SymbolPicker: { path: ../../Foundation/SymbolPicker }
+  SPIndicator: { path: ../../Foundation/SPIndicator }
+  StripedTextTable: { path: ../../Foundation/StripedTextTable }
+  TamioEditor: { path: ../../Foundation/TamioEditor }
+  CodeMirrorUI: { path: ../../External/CodeMirrorUI }
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    # The same version as the Mac app: one changelog, one release.
+    MARKETING_VERSION: "0.2.13"
+    CURRENT_PROJECT_VERSION: $(MARKETING_VERSION)
+    DEVELOPMENT_TEAM: NCFNX3LJ83
+targets:
+  TamioMobile:
+    type: application
+    platform: iOS
+    sources:
+      - path: TamioMobile
+        excludes:
+          - Info.plist
+      - path: ../../Resources/EULA
+        buildPhase: resources
+      - path: ../../Resources/LICENSE
+        buildPhase: resources
+      - path: ../../Resources/Tamio.icon
+        buildPhase: resources
+        type: folder.iconcomposer
+    settings:
+      base:
+        PRODUCT_NAME: Tamio
+        ASSETCATALOG_COMPILER_APPICON_NAME: Tamio
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_ENTITLEMENTS: TamioMobile/TamioMobile.entitlements
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: TamioMobile/Info.plist
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_CFBundleDisplayName: Tamio
+        INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
+        INFOPLIST_KEY_NSFaceIDUsageDescription: "Face ID confirms it is you before a sensitive step."
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 MOE AI LLC. Based on Rayon: © 2022 Lakr Aream, © 2026 mizorewww and catussh contributors."
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportsDocumentBrowser: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # The Mac has its own app; this one does not also run there.
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: sb.moe.tamio.debug
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: sb.moe.tamio
+    dependencies:
+      - package: TamioModule
+      - package: TamioTerminal
+      - package: MachineStatus
+      - package: MachineStatusView
+      - package: SymbolPicker
+      - package: SPIndicator
+      - package: StripedTextTable
+      - package: TamioEditor
+      - package: CodeMirrorUI
+        product: CodeEditorUI
+schemes:
+  TamioMobile:
+    build:
+      targets:
+        TamioMobile: all
+    run:
+      config: Debug
+    archive:
+      config: Release

@@ -51,7 +51,7 @@ enum TamioUtil {
     /// window cannot take a modal right now — a sheet is still animating
     /// out — the present waits in PresentationQueue and `completion` hears
     /// whether it went up.
-    static func presentModalSheet<Content: View>(rootView: Content, completion: ((Bool) -> Void)? = nil) {
+    @MainActor static func presentModalSheet<Content: View>(rootView: Content, completion: ((Bool) -> Void)? = nil) {
         let controller = UIHostingController(rootView: rootView)
         controller.isModalInPresentation = true
         controller.modalTransitionStyle = .coverVertical
@@ -63,7 +63,7 @@ enum TamioUtil {
     static func selectIdentity() async -> RDIdentity.ID? {
         debugPrint("Picking Identity")
         return await withCheckedContinuation { continuation in
-            onMainThread {
+            Task { @MainActor in
                 let picker = NavigationStack {
                     PickIdentityView {
                         continuation.resume(returning: $0)
@@ -82,7 +82,7 @@ enum TamioUtil {
     static func selectMachine(canSelectMany: Bool = true) async -> [RDMachine.ID] {
         debugPrint("Picking Machine")
         return await withCheckedContinuation { continuation in
-            onMainThread {
+            Task { @MainActor in
                 let picker = NavigationStack {
                     PickMachineView(completion: {
                         continuation.resume(returning: $0)
@@ -107,7 +107,7 @@ enum TamioUtil {
             guard !machineIds.isEmpty else {
                 return
             }
-            onMainThread {
+            await MainActor.run {
                 let runner = NavigationStack {
                     let context = SnippetExecuteContext(snippet: snippet, machineGroup: machineIds.map { machineId in
                         TamioStore.shared.machineGroup[machineId]
