@@ -138,10 +138,8 @@ private struct HomeGroupSwitcher: View {
                 count: machines.filter { $0.group == name }.count
             ))
         }
-        let ungrouped = machines.filter { $0.group.isEmpty }.count
-        if ungrouped > 0 {
-            items.append(Segment(filter: .ungrouped, rawTitle: "No Group", count: ungrouped))
-        }
+        // Servers in no group are under All only: a No Group choice read as
+        // a group of its own.
         return items
     }
 
