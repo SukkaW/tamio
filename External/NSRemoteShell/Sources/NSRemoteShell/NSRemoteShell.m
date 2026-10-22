@@ -600,6 +600,14 @@ continue; \
 
 // MARK: - HELPER
 
+- (nullable NSString*)peekLastError {
+    NSString *result;
+    @synchronized (self) {
+        result = self.lastError;
+    }
+    return [result isEqualToString:@""] ? NULL : result;
+}
+
 - (nullable NSString*)getLastError {
     NSString *result;
     @synchronized (self) {

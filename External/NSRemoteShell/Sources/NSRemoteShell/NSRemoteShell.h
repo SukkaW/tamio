@@ -84,6 +84,8 @@ typedef BOOL (^NSRemoteShellHostKeyVerifier)(NSString *host, NSNumber *port, NSS
 #pragma mark helper
 
 - (nullable NSString *)getLastError;
+/// The last error without taking it, so getLastError still reports it.
+- (nullable NSString *)peekLastError;
 - (nullable NSString*)getLastFileTransferError;
 
 #pragma mark execution

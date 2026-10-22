@@ -54,6 +54,25 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
 
     @Published public var navigationSubtitle: String = ""
 
+    /// How many times a dropped connection is tried again, 10 s apart,
+    /// before the terminal is left closed with Reconnect.
+    public static let reconnectAttempts = 3
+    /// A variable so a test need not wait ten seconds an attempt.
+    nonisolated(unsafe) public static var reconnectDelay: TimeInterval = 10
+    private var reconnectAttempt = 0
+    /// Set once the user has closed the session: a drop after that is not
+    /// reconnected.
+    private var closedByUser = false
+
+    /// How a session's loop ended.
+    private enum Ending {
+        /// The shell exited; the session was still connected.
+        case exited
+        case dropped
+        case connectFailed
+        case authFailed
+    }
+
     /// The folder the shell last reported, when it reports one.
     @Published public private(set) var workingDirectory: String?
     /// Main thread only, like the writes to the surface.
@@ -240,8 +259,12 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
     }
 
     public func processBootstrap() {
+        var ending = Ending.exited
         defer {
-            onMainThread { self.processShutdown(exitFromShell: true) }
+            onMainThread {
+                self.processShutdown(exitFromShell: true)
+                self.reconnectIfNeeded(after: ending)
+            }
         }
 
         onMainThread {
@@ -292,6 +315,7 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
         case .success:
             break
         case .connectFailed:
+            ending = .connectFailed
             if let refusal = shell.hostKeyRefusal {
                 putInformation(refusal.replacingOccurrences(of: "\n", with: "\r\n"))
             } else if let proxyFailure = shell.getLastError() {
@@ -301,6 +325,7 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
             }
             return
         case .authenticateFailed:
+            ending = .authFailed
             if machine.signsInWithoutCredentials {
                 putInformation(String(localized: "The server did not let \(machine.loginUsername(with: nil)) in without a password or key."))
                 if let wanted = shell.getLastError() {
@@ -331,6 +356,8 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
         let hook = remoteType == .machine && machine.shellIntegration ? ShellIntegration.hook : ""
         shell.begin(withTerminalType: "xterm") { [weak self] in
             debugPrint("channel open")
+            // Connected again: a later drop gets its own attempts.
+            self?.reconnectAttempt = 0
             // The server's startup snippet, then the command the terminal was
             // opened for, are typed once the shell is there, as if the user
             // had typed them.
@@ -361,8 +388,34 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
             self?.continueDecision ?? false
         }
 
-        // leave loop
+        // leave loop: the shell exited, leaving no error, or the session
+        // went. A transport error ("transport read") is left by a socket that
+        // closed, before the keepalive gets to mark the session disconnected.
+        ending = shell.isConnected && shell.peekLastError() == nil ? .exited : .dropped
         debugPrint("\(self) \(#function) defer \(machine.id)")
+    }
+
+    /// A server's terminal that lost its connection, or could not connect,
+    /// tries again by itself, `reconnectAttempts` times `reconnectDelay`
+    /// apart. Not after the user closed it, a shell the user exited, or a
+    /// sign-in the server refused: trying those again would not help.
+    private func reconnectIfNeeded(after ending: Ending) {
+        guard remoteType == .machine, !closedByUser, ending == .dropped || ending == .connectFailed else { return }
+        guard reconnectAttempt < Self.reconnectAttempts else {
+            putInformation(String(localized: "[i] Could not reconnect after \(Self.reconnectAttempts) attempts. Reconnect tries again."))
+            return
+        }
+        reconnectAttempt += 1
+        let attempt = reconnectAttempt
+        putInformation(String(localized: "[i] Connection lost. Reconnecting in \(Int(Self.reconnectDelay)) s (attempt \(attempt) of \(Self.reconnectAttempts))…"))
+        onMainThread(delay: Self.reconnectDelay) { [weak self] in
+            // Still closed, and not by the user meanwhile; a Reconnect the
+            // user clicked in between has it connected already.
+            guard let self, closed, !closedByUser else { return }
+            // The bootstrap runs on its own queue, as it did at first.
+            nonisolated(unsafe) let session = self
+            Self.queue.async { session.processBootstrap() }
+        }
     }
 
     private func readDirectory(in output: String) {
@@ -374,6 +427,7 @@ open class TerminalContext: ObservableObject, Identifiable, Equatable {
     }
 
     public func processShutdown(exitFromShell: Bool = false) {
+        if !exitFromShell { closedByUser = true }
         if remoteType == .local {
             // Nothing to disconnect: the surface owns the shell, and ends it
             // with the terminal.

@@ -20847,6 +20847,38 @@
           }
         }
       }
+    },
+    "[i] Could not reconnect after %lld attempts. Reconnect tries again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[i] Could not reconnect after %lld attempts. Reconnect tries again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[i] 尝试 %lld 次后仍无法重新连接。点击“重新连接”可再次尝试。"
+          }
+        }
+      }
+    },
+    "[i] Connection lost. Reconnecting in %lld s (attempt %lld of %lld)…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[i] Connection lost. Reconnecting in %lld s (attempt %lld of %lld)…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[i] 连接已断开。%lld 秒后重新连接（第 %lld 次，共 %lld 次）…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

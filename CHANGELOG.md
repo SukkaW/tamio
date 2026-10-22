@@ -13,6 +13,17 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+### Added
+- **A terminal reconnects by itself.** A server's terminal whose connection
+  drops, or that could not connect, tries again three times, ten seconds
+  apart, saying so in the terminal; after that it stays closed with
+  Reconnect. A shell you exited, a session you closed, and a sign-in the
+  server refused are left alone.
+
+### Changed
+- **Home's group switcher no longer offers No Group.** Servers in no group
+  are under All; a choice of their own read as a group.
+
 ## [0.2.12] - 2026-10-21
 
 ### Fixed
