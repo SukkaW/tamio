@@ -31,6 +31,7 @@ struct TamioMobileApp: App {
         CloudSync.shared.start()
         // Every server card shows live status without opening a monitor.
         LiveStatusCenter.shared.start()
+        PortForwardBackend.shared.reportProblem = { UIBridge.presentError(with: $0) }
 
         #if DEBUG
             Self.addPreviewServer()
@@ -60,6 +61,24 @@ struct TamioMobileApp: App {
             machine.associatedIdentity = identity.id.uuidString
             store.identityGroup.insert(identity)
             store.machineGroup.insert(machine)
+            // A snippet and a forward through it, so those pages have rows.
+            if store.snippetGroup.snippets.isEmpty {
+                var snippet = RDSnippet()
+                snippet.name = "Disk usage"
+                snippet.group = "Checks"
+                snippet.comment = "Every mounted file system"
+                snippet.code = "df -h"
+                store.snippetGroup.insert(snippet)
+            }
+            if store.portForwardGroup.forwards.isEmpty {
+                var forward = RDPortForward()
+                forward.forwardOrientation = .listenLocal
+                forward.bindPort = 8080
+                forward.usingMachine = machine.id
+                forward.targetHost = "127.0.0.1"
+                forward.targetPort = 80
+                store.portForwardGroup.insert(forward)
+            }
             // TAMIO_PREVIEW_OPEN=terminal opens its terminal once the window is up.
             if environment["TAMIO_PREVIEW_OPEN"] == "terminal" {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
@@ -73,6 +92,8 @@ struct TamioMobileApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
+                // The shared server views (cards, table, inspector) act through these.
+                .environment(\.serverActions, .ios)
                 #if DEBUG
                 .fullScreenCover(isPresented: .constant(ProcessInfo.processInfo.environment["TAMIO_PREVIEW_EDITOR"] != nil)) {
                     EditorPreviewScreen()

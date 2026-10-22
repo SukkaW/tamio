@@ -6,8 +6,9 @@
 //  and Run… (server picker, then the batch run sheet).
 //
 
-import TamioModule
+import MachineStatusView
 import SwiftUI
+import TamioModule
 
 struct SnippetsView: View {
     @EnvironmentObject var store: TamioStore
@@ -69,8 +70,15 @@ struct SnippetsView: View {
                     spacing: RX.Space.s4
                 ) {
                     ForEach(Array(filtered.enumerated()), id: \.element.id) { index, snippet in
-                        SnippetTile(snippet: snippet) { editing = snippet.id }
-                            .rxRise(index)
+                        SnippetTile(snippet: snippet, run: { SnippetActions.run(snippet.id) }, edit: { editing = snippet.id }) {
+                            Button("Run…") { SnippetActions.run(snippet.id) }
+                            Button("Edit…") { editing = snippet.id }
+                            Button("Duplicate") { SnippetActions.duplicate(snippet.id) }
+                            Button("Copy Command") { Dialogs.sendPasteboard(str: snippet.code) }
+                            Divider()
+                            Button("Delete…", role: .destructive) { SnippetActions.delete(snippet.id) }
+                        }
+                        .rxRise(index)
                             .transition(.scale(scale: 0.96).combined(with: .opacity))
                     }
                 }
@@ -92,52 +100,6 @@ struct SnippetsView: View {
 
     private struct EditingID: Identifiable {
         let id: RDSnippet.ID
-    }
-}
-
-private struct SnippetTile: View {
-    let snippet: RDSnippet
-    let edit: () -> Void
-    @State private var hovered = false
-
-    var detail: String {
-        [snippet.group, snippet.comment].filter { !$0.isEmpty }.joined(separator: " · ")
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: RX.Space.s3) {
-            HStack(alignment: .top, spacing: RX.Space.s3) {
-                SymbolTile(snippet.getSFAvatar())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(snippet.name.isEmpty ? String(localized: "Untitled") : snippet.name)
-                        .font(.rxBodyStrong)
-                        .foregroundStyle(.rxInk)
-                        .lineLimit(1)
-                    if !detail.isEmpty {
-                        HelpText(detail)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: RX.Space.s2)
-                Button("Run…") { SnippetActions.run(snippet.id) }
-                    .buttonStyle(.rx(size: .small))
-            }
-            CodeBlock(snippet.code.trimmingCharacters(in: .whitespacesAndNewlines), lineLimit: 4)
-        }
-        .rxCard()
-        .scaleEffect(hovered ? 1.01 : 1)
-        .animation(.easeOut(duration: 0.15), value: hovered)
-        .contentShape(RoundedRectangle(cornerRadius: RX.Radius.card, style: .continuous))
-        .onHover { hovered = $0 }
-        .onTapGesture(count: 2, perform: edit)
-        .contextMenu {
-            Button("Run…") { SnippetActions.run(snippet.id) }
-            Button("Edit…", action: edit)
-            Button("Duplicate") { SnippetActions.duplicate(snippet.id) }
-            Button("Copy Command") { Dialogs.sendPasteboard(str: snippet.code) }
-            Divider()
-            Button("Delete…", role: .destructive) { SnippetActions.delete(snippet.id) }
-        }
     }
 }
 

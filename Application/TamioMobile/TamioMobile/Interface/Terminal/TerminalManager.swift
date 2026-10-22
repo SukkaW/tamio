@@ -46,6 +46,19 @@ class TerminalManager: ObservableObject {
         terminals.append(object)
     }
 
+    /// A new terminal on the server that runs `command` once signed in.
+    func begin(for machineId: RDMachine.ID, running command: String) {
+        let machine = TamioStore.shared.machineGroup[machineId]
+        guard machine.isNotPlaceholder() else {
+            UIBridge.presentError(with: String(localized: "Unknown Bad Data"))
+            return
+        }
+        let object = TerminalContext(machine: machine)
+        object.initialCommand = command
+        TamioStore.shared.storeRecentIfNeeded(from: machineId)
+        terminals.append(object)
+    }
+
     func begin(for command: SSHCommandReader, force: Bool = false) {
         assert(Thread.isMainThread, "accessing to property terminals requires main thread")
         debugPrint("\(self) \(#function) \(command.command)")

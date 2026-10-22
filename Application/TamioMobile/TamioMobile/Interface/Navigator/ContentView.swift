@@ -37,7 +37,19 @@ enum AppTab: Hashable {
 
 /// The iPhone tab bar.
 struct TabsView: View {
-    @State private var selection: AppTab = .home
+    @State private var selection: AppTab = {
+        #if DEBUG
+            // TAMIO_PREVIEW_TAB=servers starts a debug build on that tab.
+            switch ProcessInfo.processInfo.environment["TAMIO_PREVIEW_TAB"] {
+            case "servers": return .servers
+            case "sessions": return .sessions
+            case "snippets": return .snippets
+            case "more": return .more
+            default: break
+            }
+        #endif
+        return .home
+    }()
     @ObservedObject var terminals = TerminalManager.shared
     @ObservedObject var monitors = MonitorCenter.shared
     @ObservedObject var transfers = FileTransferManager.shared
@@ -86,7 +98,20 @@ struct SidebarView: View {
     @ObservedObject var terminals = TerminalManager.shared
     @ObservedObject var monitors = MonitorCenter.shared
     @ObservedObject var transfers = FileTransferManager.shared
-    @State private var selection: Route? = .home
+    @State private var selection: Route? = {
+        #if DEBUG
+            // TAMIO_PREVIEW_ROUTE=servers starts a debug build on that page.
+            switch ProcessInfo.processInfo.environment["TAMIO_PREVIEW_ROUTE"] {
+            case "servers": return .servers
+            case "identities": return .identities
+            case "snippets": return .snippets
+            case "portforward": return .portForward
+            case "settings": return .settings
+            default: break
+            }
+        #endif
+        return .home
+    }()
 
     var body: some View {
         NavigationSplitView {
@@ -277,8 +302,35 @@ private struct MonitorSessionRow: View {
 /// Identities, Port Forward, Settings, About, Logs, License.
 struct MoreView: View {
     @EnvironmentObject var store: TamioStore
+    @State private var pushed: Destination?
+
+    enum Destination: Hashable { case identities, portForward, settings }
 
     var body: some View {
+        list
+            // The destinations the rows link to, reachable by state too: a
+            // debug build started with TAMIO_PREVIEW_MORE=identities,
+            // portforward or settings opens that page.
+            .navigationDestination(item: $pushed) { destination in
+                switch destination {
+                case .identities: IdentityView()
+                case .portForward: PortForwardView()
+                case .settings: SettingView()
+                }
+            }
+            .onAppear {
+                #if DEBUG
+                    switch ProcessInfo.processInfo.environment["TAMIO_PREVIEW_MORE"] {
+                    case "identities": pushed = .identities
+                    case "portforward": pushed = .portForward
+                    case "settings": pushed = .settings
+                    default: break
+                    }
+                #endif
+            }
+    }
+
+    var list: some View {
         List {
             Section {
                 NavigationLink { IdentityView() } label: {

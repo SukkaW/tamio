@@ -29,6 +29,7 @@ struct TamioApp: App {
         CloudSync.shared.start()
         // Every server card shows live status without opening a monitor.
         LiveStatusCenter.shared.start()
+        PortForwardBackend.shared.reportProblem = { Dialogs.presentError(with: $0) }
         // Agents reach the servers through the MCP server (Settings › MCP).
         AgentBridge.shared.start()
         // Release builds look for new versions (Sparkle) once a day.

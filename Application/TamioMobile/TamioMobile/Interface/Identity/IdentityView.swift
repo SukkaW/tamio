@@ -2,133 +2,123 @@
 //  IdentityView.swift
 //  TamioMobile
 //
-//  Created by Lakr Aream on 2022/3/2.
+//  Identities grouped by group, as on the Mac's list; the editor is pushed
+//  over it (the iOS editor is a form of its own, not a panel).
 //
 
-import TamioModule
+import MachineStatusView
 import SwiftUI
+import TamioModule
 
 struct IdentityView: View {
     @EnvironmentObject var store: TamioStore
-    @State private var searchKey = ""
-    @State private var openCreate = false
+    @State private var searchText = ""
+    @State private var selection: RDIdentity.ID?
+    @State private var creating = false
 
     var filtered: [RDIdentity] {
-        let all = store.identityGroup.identities
-        guard !searchKey.isEmpty else { return all }
-        let key = searchKey.lowercased()
+        let all = store.identityGroup.shared
+        guard !searchText.isEmpty else { return all }
+        let key = searchText.lowercased()
         return all.filter {
-            $0.username.lowercased().contains(key)
-                || $0.comment.lowercased().contains(key)
+            $0.name.lowercased().contains(key)
                 || $0.group.lowercased().contains(key)
+                || $0.comment.lowercased().contains(key)
         }
     }
 
     var groups: [(name: String, identities: [RDIdentity])] {
-        let names = Set(filtered.map(\.group)).sorted { lhs, rhs in
+        let identities = filtered
+        let names = Set(identities.map(\.group)).sorted { lhs, rhs in
             if lhs.isEmpty { return false }
             if rhs.isEmpty { return true }
             return lhs.localizedStandardCompare(rhs) == .orderedAscending
         }
-        return names.map { name in (name, filtered.filter { $0.group == name }.sorted { $0.username < $1.username }) }
+        return names.map { name in
+            (name, identities.filter { $0.group == name }.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending })
+        }
     }
 
     var body: some View {
-        Group {
-            if store.identityGroup.identities.isEmpty {
-                EmptyStateView(
-                    "No identities yet",
-                    systemImage: "person",
-                    message: "A username with a password or key.",
-                    actionTitle: "New Identity"
-                ) {
-                    openCreate = true
-                }
-                .frame(maxHeight: .infinity)
-                .background(RXBackdrop().ignoresSafeArea())
-            } else {
-                List {
-                    ForEach(groups, id: \.name) { group in
-                        Section {
-                            ForEach(group.identities) { identity in
-                                NavigationLink {
-                                    EditIdentityView(requestIdentity: identity.id)
-                                } label: {
-                                    IdentityRow(identity: identity)
-                                }
-                                .rxListRow()
-                                .swipeActions {
-                                    Button(role: .destructive) {
-                                        UIBridge.requiresConfirmation(message: "Delete identity \(identity.username)?") { confirmed in
-                                            if confirmed { store.identityGroup.delete(identity.id) }
-                                        }
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                                .contextMenu {
-                                    if !identity.publicKey.isEmpty {
-                                        Button {
-                                            UIBridge.sendPasteboard(str: identity.publicKey)
-                                        } label: {
-                                            Label("Copy Public Key", systemImage: "doc.on.doc")
-                                        }
-                                    }
-                                    Button {
-                                        var copy = identity
-                                        copy.id = UUID()
-                                        store.identityGroup.insert(copy)
-                                    } label: {
-                                        Label("Duplicate", systemImage: "plus.square.on.square")
-                                    }
-                                }
-                            }
-                        } header: {
-                            RXSectionHeader(group.name.isEmpty ? "Default" : group.name)
-                        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: RX.Space.s3) {
+                if store.identityGroup.shared.isEmpty {
+                    EmptyStateView(
+                        "No identities yet",
+                        systemImage: "person",
+                        message: "SSH keys you can use on any server, as any user.",
+                        actionTitle: "New Key"
+                    ) {
+                        creating = true
                     }
+                    .rxCard()
+                } else {
+                    list
                 }
-                .rxGroupedList()
-                .searchable(text: $searchKey, prompt: "Search identities")
             }
+            .padding(.horizontal, RX.Space.s4)
+            .padding(.top, RX.Space.s1)
+            .padding(.bottom, RX.Space.s6)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(RXBackdrop().ignoresSafeArea())
         .navigationTitle("Identities")
+        .searchable(text: $searchText, prompt: "Search identities")
         .toolbar {
-            ToolbarItem {
-                Button {
-                    openCreate = true
-                } label: {
-                    Label("New Identity", systemImage: "plus")
+            ToolbarItem(placement: .primaryAction) {
+                Button { creating = true } label: {
+                    Label("New Key", systemImage: "plus")
                 }
             }
         }
-        .sheet(isPresented: $openCreate) {
+        .sheet(isPresented: $creating) {
             NavigationStack { EditIdentityView() }
         }
+        .navigationDestination(item: Binding(
+            get: { selection.map(Selected.init) },
+            set: { selection = $0?.id }
+        )) { selected in
+            EditIdentityView(requestIdentity: selected.id)
+        }
     }
+
+    var list: some View {
+        IdentityList(groups: groups, selection: nil, select: { selection = $0 }) { identity in
+            Button("Duplicate") { IdentityActions.duplicate(identity.id) }
+            Button("Copy Public Key") { UIBridge.sendPasteboard(str: identity.publicKey) }
+                .disabled(identity.publicKey.isEmpty)
+            Divider()
+            Button("Delete…", role: .destructive) { IdentityActions.delete(identity.id) }
+        }
+    }
+
+    private struct Selected: Identifiable, Hashable { let id: RDIdentity.ID }
 }
 
-private struct IdentityRow: View {
-    let identity: RDIdentity
-    @EnvironmentObject var store: TamioStore
-
-    var usage: Int {
-        store.machineGroup.machines.filter { $0.associatedIdentity == identity.id.uuidString }.count
+@MainActor
+enum IdentityActions {
+    static func duplicate(_ id: RDIdentity.ID) {
+        var copy = TamioStore.shared.identityGroup[id]
+        guard copy.hasCredentials else { return }
+        copy.id = UUID()
+        copy.name = copy.displayName + " copy"
+        TamioStore.shared.identityGroup.insert(copy)
     }
 
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(identity.username)
-                    .foregroundStyle(.rxInk)
-                Text(identity.authDescription + (identity.authenticAutomatically ? " · Automatic" : ""))
-                    .font(.caption)
-                    .foregroundStyle(.rxInkSecondary)
-            }
-            Spacer()
-            Text("\(usage) server\(usage == 1 ? "" : "s")")
-                .font(.footnote.monospacedDigit())
-                .foregroundStyle(.rxInkSecondary)
+    static func delete(_ id: RDIdentity.ID) {
+        let store = TamioStore.shared
+        let identity = store.identityGroup[id]
+        let users = store.machineGroup.machines.filter { $0.associatedIdentity == id.uuidString }.count
+        UIBridge.requiresConfirmation(
+            message: String(localized: "Delete identity \(identity.displayName)?"),
+            informative: users > 0
+                ? (users == 1 ? String(localized: "1 server uses it and will try automatic identities instead.") : String(localized: "\(users) servers use it and will try automatic identities instead."))
+                : String(localized: "Its password and keys are removed from Tamio."),
+            confirmTitle: String(localized: "Delete"),
+            destructive: true
+        ) { confirmed in
+            guard confirmed else { return }
+            store.identityGroup.delete(id)
         }
     }
 }

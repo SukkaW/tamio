@@ -24,6 +24,7 @@ let package = Package(
         .target(
             name: "MachineStatusView",
             dependencies: ["MachineStatus", "TamioModule"],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]

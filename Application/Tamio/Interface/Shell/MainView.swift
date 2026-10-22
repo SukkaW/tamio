@@ -22,6 +22,8 @@ struct MainView: View {
 
     var body: some View {
         window
+            // The shared server views (cards, table, inspector) act through these.
+            .environment(\.serverActions, .mac)
             // Open Tamio from the menu bar, with the window closed, opens it again.
             .onAppear {
                 MainWindow.openWindow = openWindow

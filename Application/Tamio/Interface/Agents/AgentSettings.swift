@@ -6,6 +6,7 @@
 //  up (commands, the skill, a prompt to paste), and what agents did lately.
 //
 
+import MachineStatusView
 import SwiftUI
 import TamioDesign
 import TamioModule
@@ -149,85 +150,3 @@ struct AgentActivitySettings: View {
     }
 }
 
-/// One entry: who, what, where, when, and how it went.
-struct AgentActivityRow: View {
-    let entry: AgentActivity
-    var showsHosts = false
-    @State private var expanded = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: RX.Space.s2) {
-                Image(systemName: (entry.steps?.count ?? 0) > 1 ? "list.bullet" : entry.tool == "report" ? "text.bubble" : entry.tool.hasPrefix("run_") ? "terminal" : "pencil")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.rxAccent)
-                    .frame(width: 14)
-                Text(verbatim: entry.summary)
-                    .font(.rxBodyStrong)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: RX.Space.s2)
-                Text(verbatim: RXFormat.relative(entry.date))
-                    .font(.rxHelp)
-                    .foregroundStyle(.rxInkSecondary)
-                    .fixedSize()
-            }
-            Text(verbatim: [entry.client, entry.device, showsHosts ? entry.hostNames.joined(separator: ", ") : nil, entry.outcome]
-                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.rxHelp)
-                .foregroundStyle(entry.outcome.hasPrefix("declined") ? Color.rxWarning : Color.rxInkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            // Whole or not at all: a short detail shows; a long one, or a
-            // task's steps, waits for a click. Expanded, a task lists its
-            // steps instead.
-            let lines = entry.detail.split(separator: "\n").count
-            if !entry.detail.isEmpty, !(expanded && (entry.steps?.count ?? 0) > 1) {
-                if expanded || lines <= 3 {
-                    Text(verbatim: entry.detail)
-                        .font(.rxCode)
-                        .foregroundStyle(.rxInk)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                } else {
-                    Label(
-                        (entry.steps?.count ?? 0) > 1 ? String(localized: "Show \(entry.steps?.count ?? 0) steps") : String(localized: "Show \(lines) lines"),
-                        systemImage: "chevron.right"
-                    )
-                    .font(.rxHelp)
-                    .foregroundStyle(.rxAccent)
-                }
-            }
-            if expanded, let steps = entry.steps, steps.count > 1 {
-                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: "\(index + 1). \(step.summary) · \(step.outcome)")
-                            .font(.rxHelp)
-                            .foregroundStyle(step.outcome.hasPrefix("declined") || step.results.contains { $0.exitCode != 0 }
-                                ? Color.rxWarning : Color.rxInkSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(verbatim: AgentActivity.line(step))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.rxInk)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            } else if expanded {
-                ForEach(entry.results, id: \.host) { result in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: "\(result.host) · \(result.exitCode.map { String(localized: "exit \($0)") } ?? String(localized: "no exit code"))")
-                            .font(.rxHelp)
-                            .foregroundStyle(result.exitCode == 0 ? Color.rxInkSecondary : Color.rxDanger)
-                        if !result.tail.isEmpty {
-                            Text(result.tail.split(separator: "\n").suffix(6).joined(separator: "\n"))
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.rxInkSecondary)
-                                .textSelection(.enabled)
-                        }
-                    }
-                }
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { expanded.toggle() }
-    }
-}

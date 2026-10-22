@@ -2,226 +2,138 @@
 //  ServersView.swift
 //  TamioMobile
 //
-//  Servers grouped, with redaction and Batch Startup.
+//  All servers in one list, as on the Mac: each group a badge after the
+//  name, with search, redaction, Open Terminals and New Server. The server
+//  menu and the actions behind it are here too.
 //
 
 import MachineStatusView
-import TamioModule
 import SwiftUI
+import TamioModule
 
 struct ServersView: View {
     @EnvironmentObject var store: TamioStore
-    @ObservedObject var monitors = MonitorCenter.shared
-    @State private var searchKey = ""
-    @State private var openNewServer = false
-    @State private var editing: RDMachine.ID?
+    @Environment(\.serverActions) private var actions
+    @State private var searchText = ""
+    @State private var selection: RDMachine.ID?
 
     var filtered: [RDMachine] {
-        let all = store.machineGroup.machines
-        guard !searchKey.isEmpty else { return all }
-        return all.filter { $0.isQualifiedForSearch(text: searchKey.lowercased()) }
+        let machines = store.machineGroup.machines
+        guard !searchText.isEmpty else { return machines }
+        return machines.filter { $0.isQualifiedForSearch(text: searchText) }
     }
 
-    var groups: [(name: String, machines: [RDMachine])] {
-        let names = Set(filtered.map(\.group)).sorted { lhs, rhs in
-            if lhs.isEmpty { return false }
-            if rhs.isEmpty { return true }
-            return lhs.localizedStandardCompare(rhs) == .orderedAscending
-        }
-        return names.map { name in
-            (name, filtered.filter { $0.group == name }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
-        }
+    /// By name; a server's group is a badge after it, not a section.
+    var sorted: [RDMachine] {
+        filtered.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     var body: some View {
-        Group {
-            if store.machineGroup.machines.isEmpty {
-                EmptyStateView(
-                    "No servers yet",
-                    systemImage: "server.rack",
-                    actionTitle: "New Server"
-                ) {
-                    openNewServer = true
+        ScrollView {
+            VStack(alignment: .leading, spacing: RX.Space.s3) {
+                if store.machineRedacted != .none {
+                    RedactionBanner()
                 }
-                .frame(maxHeight: .infinity)
-                .background(RXBackdrop().ignoresSafeArea())
-            } else {
-                List {
-                    if store.machineRedacted != .none {
-                        Section {
-                            HStack {
-                                Image(systemName: "eye.slash").foregroundStyle(.rxInkSecondary)
-                                Text(store.machineRedacted == .all ? "Names and addresses are hidden" : "Addresses are hidden")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.rxInkSecondary)
-                                Spacer()
-                                Button("Show") { store.machineRedacted = .none }
-                                    .font(.subheadline.weight(.semibold))
-                            }
-                            .rxListRow()
-                        }
+                if store.machineGroup.machines.isEmpty {
+                    EmptyStateView(
+                        "No servers yet",
+                        systemImage: "server.rack",
+                        actionTitle: "New Server"
+                    ) {
+                        actions.newServer()
                     }
-                    ForEach(groups, id: \.name) { group in
-                        Section {
-                            ForEach(group.machines) { machine in
-                                ServerListRow(machine: machine.id, edit: { editing = machine.id })
-                                    .rxListRow()
-                            }
-                        } header: {
-                            RXSectionHeader(group.name.isEmpty ? "Default" : group.name)
-                        }
+                    .rxCard()
+                } else if filtered.isEmpty {
+                    EmptyStateView("No matches", systemImage: "magnifyingglass")
+                        .rxCard()
+                } else {
+                    ServersTable(machines: sorted, selection: $selection) { machine in
+                        ServerMenuItems(machine: machine)
                     }
                 }
-                .rxGroupedList()
-                .searchable(text: $searchKey, prompt: "Search servers")
             }
+            .padding(.horizontal, RX.Space.s4)
+            .padding(.top, RX.Space.s1)
+            .padding(.bottom, RX.Space.s6)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(RXBackdrop().ignoresSafeArea())
         .navigationTitle("Servers")
+        .searchable(text: $searchText, prompt: "Search servers")
         .toolbar {
-            ToolbarItemGroup {
-                Menu {
-                    Picker("Redaction", selection: $store.machineRedacted) {
-                        Label("Show Everything", systemImage: "eye").tag(RDMachine.RedactedLevel.none)
-                        Label("Hide Addresses", systemImage: "eye.slash").tag(RDMachine.RedactedLevel.sensitive)
-                        Label("Hide Names and Addresses", systemImage: "eye.slash.fill").tag(RDMachine.RedactedLevel.all)
-                    }
-                    Divider()
-                    Button {
-                        ServerActions.batchStartup()
-                    } label: {
-                        Label("Batch Startup", systemImage: "wind")
-                    }
-                    .disabled(store.machineGroup.machines.isEmpty)
-                } label: {
-                    Label("More", systemImage: store.machineRedacted == .none ? "ellipsis.circle" : "eye.slash")
+            ToolbarItemGroup(placement: .primaryAction) {
+                RedactionMenu()
+                Button { ServerActions.openTerminals() } label: {
+                    Label("Open Terminals…", systemImage: "rectangle.stack.badge.plus")
                 }
-                Button {
-                    openNewServer = true
-                } label: {
+                .help(String(localized: "Pick several servers and open a terminal on each"))
+                .disabled(store.machineGroup.machines.isEmpty)
+                Button { actions.newServer() } label: {
                     Label("New Server", systemImage: "plus")
                 }
             }
         }
-        .sheet(isPresented: $openNewServer) {
-            NavigationStack { EditMachineView() }
-        }
-        .sheet(item: Binding(get: { editing.map(EditTarget.init) }, set: { editing = $0?.id })) { target in
-            NavigationStack { EditMachineView(requestMachine: target.id) }
-        }
-    }
-
-    private struct EditTarget: Identifiable { let id: RDMachine.ID }
-}
-
-/// A server row: name, address, state; tap for actions.
-struct ServerListRow: View {
-    let machine: RDMachine.ID
-    let edit: () -> Void
-    @EnvironmentObject var store: TamioStore
-    @ObservedObject var live = LiveStatusCenter.shared
-
-    var body: some View {
-        let read = store.machineGroup[machine]
-        Menu {
-            ServerMenuItems(machine: machine, edit: edit)
-        } label: {
-            HStack(spacing: RX.Space.s3) {
-                VStack(alignment: .leading, spacing: 2) {
-                    RedactableText(read.name, redacted: store.machineRedacted == .all)
-                        .foregroundStyle(.rxInk)
-                        .lineLimit(1)
-                    RedactableText("\(read.remoteAddress):\(read.remotePort)", redacted: store.machineRedacted != .none)
-                        .font(.rxCode)
-                        .foregroundStyle(.rxInkSecondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                if let session = live.session(for: machine), session.status.hasData {
-                    ServerRowState(session: session)
-                } else {
-                    Text(RXFormat.relative(read.lastConnection))
-                        .font(.footnote)
-                        .foregroundStyle(.rxInkSecondary)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .swipeActions {
-            Button(role: .destructive) {
-                ServerActions.delete(machine)
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-            Button(action: edit) {
-                Label("Edit", systemImage: "pencil")
-            }
-            .tint(.rxAccent)
-        }
     }
 }
 
-/// CPU and memory, and the traffic of the physical interfaces, as the Mac's
-/// Servers table shows them.
-private struct ServerRowState: View {
-    @ObservedObject var session: MonitorSession
-    var body: some View {
-        let status = session.status
-        let physical = status.network.elements.filter { !NetworkFilter.isVirtual($0.device) }
-        VStack(alignment: .trailing, spacing: 2) {
-            Text("CPU \(RXFormat.percent(Double(status.processor.summary.sumUsed)))% · Mem \(RXFormat.percent(status.memoryUsedPercent))%")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.rxInkSecondary)
-            Text("↑ \(RXFormat.rateString(Double(physical.map(\.txBytesPerSec).reduce(0, +)))) ↓ \(RXFormat.rateString(Double(physical.map(\.rxBytesPerSec).reduce(0, +))))")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.rxInkTertiary)
-        }
-    }
-}
-
-/// Open Terminal, Monitor, File Transfer; Edit, Duplicate, Copy; Delete.
+/// Terminal, Files, Monitor, New Terminal; Edit, Duplicate, Copy Address,
+/// Copy SSH Command, Forget Host Key; Delete: the Mac's server menu.
 struct ServerMenuItems: View {
     let machine: RDMachine.ID
-    var edit: (() -> Void)?
+    /// False where the tools already sit beside the menu (a card's ⋯ button).
+    var includesTools = true
+    @Environment(\.serverActions) private var actions
 
     var body: some View {
-        Section {
-            Button { TerminalManager.shared.begin(for: machine) } label: {
-                Label("Open Terminal", systemImage: "terminal")
+        Group {
+            if includesTools {
+                Button { actions.openTerminal(machine) } label: {
+                    Label("Open Terminal", systemImage: ServerTool.terminal.systemImage)
+                }
+                Button { actions.openFiles(machine) } label: {
+                    Label("Open Files", systemImage: ServerTool.files.systemImage)
+                }
+                Button { actions.openMonitor(machine) } label: {
+                    Label("Open Monitor", systemImage: ServerTool.monitor.systemImage)
+                }
             }
-            Button { ServerActions.openMonitor(machine) } label: {
-                Label("Open Monitor", systemImage: "waveform.path.ecg")
+            Button { TerminalManager.shared.begin(for: machine, force: true) } label: {
+                Label("New Terminal", systemImage: "plus.rectangle")
             }
-            Button { FileTransferManager.shared.begin(for: machine) } label: {
-                Label("Open File Transfer", systemImage: "arrow.up.arrow.down")
-            }
-        }
-        Section {
-            if let edit {
-                Button(action: edit) { Label("Edit", systemImage: "pencil") }
+            Divider()
+            Button { actions.edit(machine) } label: {
+                Label("Edit…", systemImage: "pencil")
             }
             Button { ServerActions.duplicate(machine) } label: {
                 Label("Duplicate", systemImage: "plus.square.on.square")
             }
-            Button {
-                UIBridge.sendPasteboard(str: TamioStore.shared.machineGroup[machine].getCommand())
-            } label: {
-                Label("Copy SSH Command", systemImage: "doc.on.doc")
+            Button { ServerActions.copyAddress(machine) } label: {
+                Label("Copy Address", systemImage: "doc.on.doc")
+            }
+            Button { ServerActions.copyCommand(machine) } label: {
+                Label("Copy SSH Command", systemImage: "chevron.left.forwardslash.chevron.right")
             }
             Button { ServerActions.forgetHostKey(machine) } label: {
-                Label("Forget Host Key", systemImage: "key.slash")
+                Label("Forget Host Key…", systemImage: "key.slash")
             }
-        }
-        Section {
-            Button(role: .destructive) { ServerActions.delete(machine) } label: {
-                Label("Delete", systemImage: "trash")
+            Divider()
+            Button(role: .destructive) { ServerActions.delete([machine]) } label: {
+                Label("Delete…", systemImage: "trash")
             }
         }
     }
 }
 
+@MainActor
 enum ServerActions {
-    @MainActor
+    /// The editor over the page, for a new server or an existing one.
+    static func edit(_ machine: RDMachine.ID?) {
+        TamioUtil.presentModalSheet(rootView: NavigationStack {
+            EditMachineView(requestMachine: machine)
+        }
+        .environmentObject(TamioStore.shared))
+    }
+
     static func openMonitor(_ machine: RDMachine.ID) {
         do {
             let existing = MonitorCenter.shared.session(for: machine)
@@ -242,39 +154,85 @@ enum ServerActions {
     }
 
     static func duplicate(_ machine: RDMachine.ID) {
-        var copy = TamioStore.shared.machineGroup[machine]
-        guard copy.isNotPlaceholder() else { return }
-        copy.id = UUID()
-        copy.name += " copy"
-        TamioStore.shared.machineGroup.insert(copy)
+        let store = TamioStore.shared
+        let original = store.machineGroup[machine]
+        guard original.isNotPlaceholder() else { return }
+        UIBridge.requiresConfirmation(
+            message: String(localized: "Duplicate \(original.name)?"),
+            confirmTitle: String(localized: "Duplicate"),
+            destructive: false
+        ) { confirmed in
+            guard confirmed else { return }
+            var copy = original
+            copy.id = UUID()
+            copy.name = original.name + " copy"
+            // A private identity belongs to one server: the copy gets its own.
+            if let raw = original.associatedIdentity, let id = UUID(uuidString: raw),
+               store.identityGroup[id].isPrivate
+            {
+                var identity = store.identityGroup[id]
+                identity.id = UUID()
+                store.identityGroup.insert(identity)
+                copy.associatedIdentity = identity.id.uuidString
+            }
+            store.machineGroup.insert(copy)
+        }
+    }
+
+    static func delete(_ machines: [RDMachine.ID]) {
+        let store = TamioStore.shared
+        guard !machines.isEmpty else { return }
+        let message = machines.count == 1
+            ? String(localized: "Delete \(store.machineGroup[machines[0]].name)?")
+            : String(localized: "Delete \(machines.count) servers?")
+        UIBridge.requiresConfirmation(
+            message: message,
+            informative: String(localized: "Port forwards through it stop working."),
+            confirmTitle: String(localized: "Delete"),
+            destructive: true
+        ) { confirmed in
+            guard confirmed else { return }
+            for machine in machines {
+                if let session = MonitorCenter.shared.session(for: machine) {
+                    MonitorCenter.shared.end(session.id)
+                }
+                if let raw = store.machineGroup[machine].associatedIdentity, let id = UUID(uuidString: raw),
+                   store.identityGroup[id].isPrivate
+                {
+                    store.identityGroup.delete(id)
+                }
+                store.machineGroup.delete(machine)
+            }
+            store.cleanRecentIfNeeded()
+        }
     }
 
     /// For a server whose keys were replaced: its next host key is saved.
-    @MainActor
     static func forgetHostKey(_ machine: RDMachine.ID) {
         let read = TamioStore.shared.machineGroup[machine]
         guard read.isNotPlaceholder() else { return }
-        UIBridge.requiresConfirmation(message: "Forget the host key of \(read.name)? The key it presents next is saved as its key.") { confirmed in
+        UIBridge.requiresConfirmation(
+            message: String(localized: "Forget the host key of \(read.name)?"),
+            informative: String(localized: "The key the server presents on the next connection is saved as its key. Do this only when you know its keys were replaced."),
+            confirmTitle: String(localized: "Forget"),
+            destructive: false
+        ) { confirmed in
             guard confirmed else { return }
             read.forgetHostKey()
         }
     }
 
-    @MainActor
-    static func delete(_ machine: RDMachine.ID) {
-        let name = TamioStore.shared.machineGroup[machine].name
-        UIBridge.requiresConfirmation(message: "Delete \(name)?") { confirmed in
-            guard confirmed else { return }
-            if let session = MonitorCenter.shared.session(for: machine) {
-                MonitorCenter.shared.end(session.id)
-            }
-            TamioStore.shared.machineGroup.delete(machine)
-            TamioStore.shared.cleanRecentIfNeeded()
-        }
+    static func copyAddress(_ machine: RDMachine.ID) {
+        let read = TamioStore.shared.machineGroup[machine]
+        UIBridge.sendPasteboard(str: "\(read.remoteAddress):\(read.remotePort)")
+    }
+
+    static func copyCommand(_ machine: RDMachine.ID) {
+        UIBridge.sendPasteboard(str: TamioStore.shared.machineGroup[machine].getCommand())
     }
 
     /// Pick servers, then open a terminal for each.
-    static func batchStartup() {
+    static func openTerminals() {
         Task {
             let machines = await TamioUtil.selectMachine()
             // Terminals present themselves through PresentationQueue once
@@ -285,5 +243,24 @@ enum ServerActions {
                 }
             }
         }
+    }
+}
+
+extension ServerActionHandlers {
+    /// What the shared server views do on iOS: sessions that present
+    /// themselves, sheets, alerts, the pasteboard.
+    @MainActor static var ios: ServerActionHandlers {
+        ServerActionHandlers(
+            openTerminal: { TerminalManager.shared.begin(for: $0) },
+            openTerminalRunning: { TerminalManager.shared.begin(for: $0, running: $1) },
+            openFiles: { FileTransferManager.shared.begin(for: $0) },
+            openMonitor: { ServerActions.openMonitor($0) },
+            edit: { ServerActions.edit($0) },
+            newServer: { ServerActions.edit(nil) },
+            copy: { UIBridge.sendPasteboard(str: $0) },
+            confirm: { message, informative, confirmTitle, destructive, completion in
+                UIBridge.requiresConfirmation(message: message, informative: informative, confirmTitle: confirmTitle, destructive: destructive, confirmation: completion)
+            }
+        )
     }
 }

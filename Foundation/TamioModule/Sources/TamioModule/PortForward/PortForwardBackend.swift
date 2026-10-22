@@ -1,27 +1,31 @@
 //
 //  PortForwardBackend.swift
-//  Tamio (macOS)
+//  TamioModule
 //
-//  The session lifecycle lives in TamioModule.PortForwardContext; this
-//  backend keeps the container, the per-forward states and validation.
+//  The session lifecycle lives in PortForwardContext; this backend keeps the
+//  container, the per-forward states and validation, for both apps' rows.
 //
 
 import Combine
-import TamioModule
+import Foundation
 
 /// The backend and its container are main-thread state, like the rows
 /// showing the forwards.
 @MainActor
-class PortForwardBackend: ObservableObject {
-    static let shared = PortForwardBackend()
+public final class PortForwardBackend: ObservableObject {
+    public static let shared = PortForwardBackend()
 
     private init() {}
 
-    @Published var container = [PortForwardContext]()
+    @Published public private(set) var container = [PortForwardContext]()
 
-    @Published var lastStatus: [RDPortForward.ID: PortForwardContext.Lifecycle] = [:]
+    @Published public private(set) var lastStatus: [RDPortForward.ID: PortForwardContext.Lifecycle] = [:]
 
-    func createSession(withPortForwardID pid: RDPortForward.ID) {
+    /// Told of a forward that cannot start (incomplete, or its server gone);
+    /// the app shows it as it shows other errors.
+    public var reportProblem: ((String) -> Void)?
+
+    public func createSession(withPortForwardID pid: RDPortForward.ID) {
         if sessionExists(withPortForwardID: pid) {
             // multiple start
             return
@@ -30,12 +34,12 @@ class PortForwardBackend: ObservableObject {
         guard portFwd.isValid(),
               let mid = portFwd.usingMachine
         else {
-            Dialogs.presentError(with: String(localized: "Invalid Info"))
+            reportProblem?(String(localized: "Invalid Info"))
             return
         }
         let machine = TamioStore.shared.machineGroup[mid]
         guard machine.isNotPlaceholder() else {
-            Dialogs.presentError(with: String(localized: "Invalid Info"))
+            reportProblem?(String(localized: "Invalid Info"))
             return
         }
         let context = PortForwardContext(
@@ -52,9 +56,12 @@ class PortForwardBackend: ObservableObject {
         context.begin()
     }
 
-    func putStatus(for pid: RDPortForward.ID, with state: PortForwardContext.Lifecycle) {
-        onMainThread {
-            self.lastStatus[pid] = state
+    /// The lifecycle handler calls from the forward's own queue.
+    nonisolated func putStatus(for pid: RDPortForward.ID, with state: PortForwardContext.Lifecycle) {
+        // A plain enum value; the compiler cannot see it is one.
+        nonisolated(unsafe) let state = state
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { self.lastStatus[pid] = state }
         }
     }
 
@@ -64,11 +71,11 @@ class PortForwardBackend: ObservableObject {
         container.removeAll { $0.id == context.id }
     }
 
-    func sessionExists(withPortForwardID pid: RDPortForward.ID) -> Bool {
+    public func sessionExists(withPortForwardID pid: RDPortForward.ID) -> Bool {
         container.first { $0.info.id == pid } != nil
     }
 
-    func endSession(withPortForwardID pid: RDPortForward.ID) {
+    public func endSession(withPortForwardID pid: RDPortForward.ID) {
         let index = container.firstIndex { $0.info.id == pid }
         putStatus(for: pid, with: .terminating)
         if let index = index {

@@ -5,16 +5,9 @@
 //  Forwards: orientation, bind, through server, target, status and an on/off switch.
 //
 
-import TamioModule
+import MachineStatusView
 import SwiftUI
-
-/// Header and rows share these, so the columns line up.
-private enum ForwardColumns {
-    static let orientation: CGFloat = 120
-    static let bind: CGFloat = 90
-    static let status: CGFloat = 200
-    static let toggle: CGFloat = 52
-}
+import TamioModule
 
 struct PortForwardView: View {
     @EnvironmentObject var store: TamioStore
@@ -93,94 +86,9 @@ struct PortForwardView: View {
     }
 
     var table: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                TableHeaderLabel("Orientation").frame(width: ForwardColumns.orientation)
-                TableHeaderLabel("Bind").frame(width: ForwardColumns.bind)
-                TableHeaderLabel("Through").frame(maxWidth: .infinity)
-                TableHeaderLabel("Target").frame(maxWidth: .infinity)
-                Color.clear.frame(width: ForwardColumns.status, height: 1)
-                Color.clear.frame(width: ForwardColumns.toggle, height: 1)
-            }
-            .padding(.horizontal, RX.Space.s3)
-            .frame(height: RX.tableHeaderHeight)
-            Hairline()
-            ForEach(Array(filtered.enumerated()), id: \.element.id) { index, forward in
-                PortForwardRow(forward: forward, selected: selection == forward.id) {
-                    selection = forward.id
-                } edit: {
-                    editor = EditorTarget(forward: forward.id)
-                }
-                .rxRise(index)
-                .transition(.opacity)
-            }
-        }
-        .animation(.rxMove, value: filtered.map(\.id))
-        .rxCard(padding: RX.Space.s2)
-    }
-}
-
-private struct PortForwardRow: View {
-    let forward: RDPortForward
-    let selected: Bool
-    let select: () -> Void
-    let edit: () -> Void
-
-    @EnvironmentObject var store: TamioStore
-    @ObservedObject var backend = PortForwardBackend.shared
-    @State private var hovered = false
-
-    var running: Bool { backend.sessionExists(withPortForwardID: forward.id) }
-
-    var body: some View {
-        let status = PortForwardPresentation(state: backend.lastStatus[forward.id], running: running)
-        HStack(spacing: 0) {
-            RXTag(forward.forwardOrientation == .listenLocal ? String(localized: "Listen local") : String(localized: "Listen remote"))
-                .frame(width: ForwardColumns.orientation, alignment: .leading)
-            Text(":\(forward.bindPort)")
-                .font(.rxCode)
-                .foregroundStyle(.rxInk)
-                .frame(width: ForwardColumns.bind, alignment: .leading)
-            RedactableText(forward.getMachineName() ?? String(localized: "No server"), redacted: store.machineRedacted == .all)
-                .font(.rxBody)
-                .foregroundStyle(forward.usingMachine == nil ? Color.rxInkSecondary : Color.rxInk)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(forward.targetHost.isEmpty ? "—" : "\(forward.targetHost):\(forward.targetPort)")
-                .font(.rxCode)
-                .foregroundStyle(.rxInk)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(status.status == .danger ? status.text : "")
-                .font(.rxBody)
-                .foregroundStyle(.rxDanger)
-                .lineLimit(1)
-                .frame(width: ForwardColumns.status, alignment: .leading)
-            Toggle("Running", isOn: Binding(get: { running }, set: { on in
-                if on {
-                    backend.createSession(withPortForwardID: forward.id)
-                } else {
-                    backend.endSession(withPortForwardID: forward.id)
-                }
-            }))
-            .labelsHidden()
-            .rxSwitchToggle()
-            .controlSize(.small)
-            .tint(.rxAccent)
-            .disabled(!forward.isValid())
-            .help(forward.isValid() ? (running ? String(localized: "Stop") : String(localized: "Start")) : String(localized: "Incomplete"))
-            .frame(width: ForwardColumns.toggle, alignment: .trailing)
-        }
-        .padding(.horizontal, RX.Space.s3)
-        .frame(height: RX.tableRowHeight)
-        .rxRowBackground(selected: selected, hovered: hovered)
-        .contentShape(Rectangle())
-        .onHover { hovered = $0 }
-        .gesture(TapGesture(count: 2).onEnded { if !running { edit() } })
-        .simultaneousGesture(TapGesture(count: 1).onEnded(select))
-        .contextMenu {
-            Button("Edit…", action: edit).disabled(running)
+        PortForwardTable(forwards: filtered, selection: $selection, edit: { editor = EditorTarget(forward: $0) }) { forward in
+            let running = backend.sessionExists(withPortForwardID: forward.id)
+            Button("Edit…") { editor = EditorTarget(forward: forward.id) }.disabled(running)
             Button("Duplicate") { PortForwardActions.duplicate(forward.id) }
             Button("Copy SSH Command") { Dialogs.sendPasteboard(str: forward.getCommand() ?? "") }
                 .disabled(forward.getCommand() == nil)

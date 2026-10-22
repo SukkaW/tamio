@@ -2,131 +2,113 @@
 //  PortForwardView.swift
 //  TamioMobile
 //
-//  Created by Lakr Aream on 2022/3/10.
+//  Forwards: orientation, bind, through server, target, status and an
+//  on/off switch, as on the Mac.
 //
 
-import TamioModule
+import MachineStatusView
 import SwiftUI
+import TamioModule
 
 struct PortForwardView: View {
     @EnvironmentObject var store: TamioStore
     @ObservedObject var backend = PortForwardBackend.shared
-    @State private var openCreate = false
+
+    @State private var searchText = ""
+    @State private var selection: RDPortForward.ID?
+    @State private var editor: EditorTarget?
+
+    struct EditorTarget: Identifiable {
+        let id = UUID()
+        let forward: RDPortForward.ID?
+    }
+
+    var filtered: [RDPortForward] {
+        let all = store.portForwardGroup.forwards
+        guard !searchText.isEmpty else { return all }
+        let key = searchText.lowercased()
+        return all.filter {
+            $0.targetHost.lowercased().contains(key)
+                || String($0.targetPort).contains(key)
+                || String($0.bindPort).contains(key)
+                || ($0.getMachineName() ?? "").lowercased().contains(key)
+        }
+    }
 
     var body: some View {
-        Group {
-            if store.portForwardGroup.forwards.isEmpty {
-                EmptyStateView(
-                    "No port forwards",
-                    systemImage: "arrow.right",
-                    actionTitle: "New Port Forward"
-                ) {
-                    openCreate = true
-                }
-                .frame(maxHeight: .infinity)
-                .background(RXBackdrop().ignoresSafeArea())
-            } else {
-                List {
-                    Section {
-                        ForEach(store.portForwardGroup.forwards) { forward in
-                            PortForwardRow(forward: forward)
-                                .rxListRow()
-                        }
-                    } header: {
-                        RXSectionHeader("\(backend.container.count) running")
+        ScrollView {
+            VStack(alignment: .leading, spacing: RX.Space.s3) {
+                if store.portForwardGroup.forwards.isEmpty {
+                    EmptyStateView(
+                        "No port forwards",
+                        systemImage: "arrow.right",
+                        actionTitle: "New Port Forward"
+                    ) {
+                        editor = EditorTarget(forward: nil)
+                    }
+                    .rxCard()
+                } else if filtered.isEmpty {
+                    EmptyStateView("No matches", systemImage: "magnifyingglass")
+                        .rxCard()
+                } else {
+                    PortForwardTable(forwards: filtered, selection: $selection, edit: { editor = EditorTarget(forward: $0) }) { forward in
+                        let running = backend.sessionExists(withPortForwardID: forward.id)
+                        Button("Edit…") { editor = EditorTarget(forward: forward.id) }.disabled(running)
+                        Button("Duplicate") { PortForwardActions.duplicate(forward.id) }
+                        Button("Copy SSH Command") { UIBridge.sendPasteboard(str: forward.getCommand() ?? "") }
+                            .disabled(forward.getCommand() == nil)
+                        Divider()
+                        Button("Delete…", role: .destructive) { PortForwardActions.delete(forward.id) }
                     }
                 }
-                .rxGroupedList()
             }
+            .padding(.horizontal, RX.Space.s4)
+            .padding(.top, RX.Space.s1)
+            .padding(.bottom, RX.Space.s6)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(RXBackdrop().ignoresSafeArea())
         .navigationTitle("Port Forward")
+        .searchable(text: $searchText, prompt: "Search forwards")
         .toolbar {
-            ToolbarItem {
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    openCreate = true
+                    for context in backend.container {
+                        backend.endSession(withPortForwardID: context.info.id)
+                    }
                 } label: {
+                    Label("Stop All", systemImage: "stop.circle")
+                }
+                .disabled(backend.container.isEmpty)
+                Button { editor = EditorTarget(forward: nil) } label: {
                     Label("New Port Forward", systemImage: "plus")
                 }
             }
         }
-        .sheet(isPresented: $openCreate) {
-            NavigationStack { EditPortForwardView() }
+        .sheet(item: $editor) { target in
+            NavigationStack { EditPortForwardView(requestPortForward: target.forward) }
         }
     }
 }
 
-private struct PortForwardRow: View {
-    let forward: RDPortForward
-    @EnvironmentObject var store: TamioStore
-    @ObservedObject var backend = PortForwardBackend.shared
-    @State private var openEdit = false
-
-    var running: Bool { backend.sessionExists(withPortForwardID: forward.id) }
-
-    var presentation: PortForwardPresentation {
-        PortForwardPresentation(state: backend.lastStatus[forward.id], running: running)
+@MainActor
+enum PortForwardActions {
+    static func duplicate(_ id: RDPortForward.ID) {
+        var copy = TamioStore.shared.portForwardGroup[id]
+        copy.id = UUID()
+        TamioStore.shared.portForwardGroup.insert(copy)
     }
 
-    var body: some View {
-        HStack(spacing: RX.Space.s3) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    RXTag(forward.forwardOrientation == .listenLocal ? "Listen local" : "Listen remote")
-                    Text(":\(forward.bindPort)")
-                        .font(.rxCode)
-                        .foregroundStyle(.rxInk)
-                }
-                Text("\(forward.getMachineName() ?? "No server") → \(forward.targetHost):\(forward.targetPort)")
-                    .font(.rxCode)
-                    .foregroundStyle(.rxInkSecondary)
-                    .lineLimit(1)
-                if presentation.status == .danger {
-                    Text(presentation.text)
-                        .font(.caption)
-                        .foregroundStyle(.rxDanger)
-                }
-            }
-            Spacer()
-            Toggle("Running", isOn: Binding(get: { running }, set: { on in
-                if on {
-                    backend.createSession(withPortForwardID: forward.id)
-                } else {
-                    backend.endSession(withPortForwardID: forward.id)
-                }
-            }))
-            .labelsHidden()
-            .tint(.rxAccent)
-            .disabled(!forward.isValid())
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { if !running { openEdit = true } }
-        .swipeActions {
-            Button(role: .destructive) {
-                UIBridge.requiresConfirmation(message: "Delete the forward on port \(forward.bindPort)?") { confirmed in
-                    guard confirmed else { return }
-                    backend.endSession(withPortForwardID: forward.id)
-                    store.portForwardGroup.delete(forward.id)
-                }
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        .contextMenu {
-            Button {
-                UIBridge.sendPasteboard(str: forward.getCommand() ?? "")
-            } label: {
-                Label("Copy Command", systemImage: "doc.on.doc")
-            }
-            Button {
-                var copy = forward
-                copy.id = .init()
-                store.portForwardGroup.insert(copy)
-            } label: {
-                Label("Duplicate", systemImage: "plus.square.on.square")
-            }
-        }
-        .sheet(isPresented: $openEdit) {
-            NavigationStack { EditPortForwardView(requestPortForward: forward.id) }
+    static func delete(_ id: RDPortForward.ID) {
+        let forward = TamioStore.shared.portForwardGroup[id]
+        UIBridge.requiresConfirmation(
+            message: String(localized: "Delete the forward on port \(forward.bindPort)?"),
+            confirmTitle: String(localized: "Delete"),
+            destructive: true
+        ) { confirmed in
+            guard confirmed else { return }
+            PortForwardBackend.shared.endSession(withPortForwardID: id)
+            TamioStore.shared.portForwardGroup.delete(id)
         }
     }
 }

@@ -1,33 +1,51 @@
 //
 //  StatusCard.swift
-//  Tamio (macOS)
+//  MachineStatusView
 //
 //  A server's live status card on Home: small, three readings that matter
 //  most (CPU, memory, disk) side by side, no rotation. A click opens the
-//  inspector with everything else.
+//  inspector with everything else. The ⋯ menu and the context menu are the
+//  app's: they name what it can do with a server.
 //
 
 import MachineStatus
-import MachineStatusView
 import SwiftUI
-import TamioDesign
 import TamioModule
 
-struct StatusCard: View {
+/// The card's measurements, for the grid and the page around it.
+public enum StatusCardMetrics {
+    /// Small: three or four across a usual window.
+    public static let minimumWidth: CGFloat = 240
+}
+
+public struct StatusCard<More: View, Context: View>: View {
     let machine: RDMachine.ID
     var selected = false
     var select: () -> Void = {}
+    let more: () -> More
+    let context: () -> Context
 
     @EnvironmentObject var store: TamioStore
+    @Environment(\.serverActions) private var actions
     @ObservedObject private var live = LiveStatusCenter.shared
     @ObservedObject private var monitors = MonitorCenter.shared
     @State private var hovered = false
 
-    /// Small: three or four across a usual window.
-    static let minimumWidth: CGFloat = 240
+    public init(
+        machine: RDMachine.ID,
+        selected: Bool = false,
+        select: @escaping () -> Void = {},
+        @ViewBuilder more: @escaping () -> More,
+        @ViewBuilder context: @escaping () -> Context
+    ) {
+        self.machine = machine
+        self.selected = selected
+        self.select = select
+        self.more = more
+        self.context = context
+    }
 
-
-    var body: some View {
+    public var body: some View {
         let read = store.machineGroup[machine]
         VStack(alignment: .leading, spacing: RX.Space.s3) {
             header(read)
@@ -54,8 +72,8 @@ struct StatusCard: View {
         // (A count-2 gesture in front of a count-1 one holds every click
         // back until the double-click time has passed.)
         .onTapGesture(perform: select)
-        .simultaneousGesture(TapGesture(count: 2).onEnded { ServerTool.terminal.show(machine) })
-        .contextMenu { ServerContextMenu(machine: machine) }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { actions.openTerminal(machine) })
+        .contextMenu { context() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(read.name)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
@@ -81,9 +99,9 @@ struct StatusCard: View {
             }
             Spacer(minLength: RX.Space.s2)
             HStack(spacing: 2) {
-                cardButton("Terminal", systemImage: "terminal") { ServerTool.terminal.show(machine) }
+                cardButton("Terminal", systemImage: "terminal") { actions.openTerminal(machine) }
                 Menu {
-                    ServerContextMenu(machine: machine, includesTools: false)
+                    more()
                 } label: {
                     Label("More", systemImage: "ellipsis")
                 }
@@ -118,7 +136,7 @@ struct StatusCard: View {
                 .foregroundStyle(.rxInkSecondary)
             Spacer()
             if live.isEnabled {
-                Button("Edit Server") { ServerActions.edit(machine) }
+                Button("Edit Server") { actions.edit(machine) }
                     .buttonStyle(.rx(size: .small))
             }
         }
@@ -126,56 +144,8 @@ struct StatusCard: View {
     }
 }
 
-/// The server's OS logo (Simple Icons, CC0), read from the release name it reports.
-struct OSLogo: View {
-    @ObservedObject var session: MonitorSession
-    var size: CGFloat = 13
-
-    var body: some View {
-        let release = session.status.system.releaseName
-        if let asset = Self.asset(for: release) {
-            // An NSImage kept per asset: Image(name) looks the asset up again
-            // at every layout, which the sidebar's slide does per frame.
-            Image(nsImage: Self.image(asset))
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .frame(width: size, height: size)
-                .foregroundStyle(.rxInkSecondary)
-                .help(release)
-                .accessibilityLabel(release)
-        }
-    }
-
-    nonisolated(unsafe) private static var images: [String: NSImage] = [:]
-
-    @MainActor static func image(_ asset: String) -> NSImage {
-        if let image = images[asset] { return image }
-        let image = NSImage(named: asset) ?? NSImage()
-        image.isTemplate = true
-        images[asset] = image
-        return image
-    }
-
-    /// "Ubuntu 24.04.1 LTS" → os-ubuntu, "macOS 26.6" → os-apple, any other
-    /// Linux → the penguin.
-    static func asset(for release: String) -> String? {
-        let name = release.lowercased()
-        guard !name.isEmpty else { return nil }
-        let marks: [(String, String)] = [
-            ("macos", "os-apple"), ("mac os", "os-apple"), ("darwin", "os-apple"),
-            ("ubuntu", "os-ubuntu"), ("debian", "os-debian"), ("fedora", "os-fedora"),
-            ("arch", "os-archlinux"), ("alpine", "os-alpinelinux"), ("nixos", "os-nixos"),
-            ("rocky", "os-rockylinux"), ("centos", "os-centos"), ("freebsd", "os-freebsd"),
-            ("windows", "os-windows"),
-        ]
-        for (mark, asset) in marks where name.contains(mark) { return asset }
-        return "os-linux"
-    }
-}
-
 /// Live / connecting / offline, as a dot before the name.
-private struct StatusPhaseDot: View {
+struct StatusPhaseDot: View {
     let session: MonitorSession?
 
     var body: some View {
@@ -218,7 +188,7 @@ private struct StatusPhaseDot: View {
 /// The OS logo, then as much of "macOS 26.6.2 · up 25d 5h" as fits whole:
 /// all of it, the OS name alone, or the logo alone. Nothing is cut short;
 /// what does not fit is in the inspector.
-private struct SystemLine: View {
+struct SystemLine: View {
     @ObservedObject var session: MonitorSession
     var showsText = true
 
@@ -247,13 +217,18 @@ private struct SystemLine: View {
 
 // MARK: - Slots
 
-struct StatusSlots: View {
+public struct StatusSlots: View {
     @ObservedObject var session: MonitorSession
     let machine: RDMachine.ID
 
-    static let height: CGFloat = 60
+    public static var height: CGFloat { 60 }
 
-    var body: some View {
+    public init(session: MonitorSession, machine: RDMachine.ID) {
+        self.session = session
+        self.machine = machine
+    }
+
+    public var body: some View {
         Group {
             switch session.phase {
             case let .failed(message) where !session.status.hasData:
@@ -326,153 +301,65 @@ struct StatusSlots: View {
         .help(help)
         .accessibilityElement(children: .combine)
     }
-
 }
 
-// MARK: - Gauges
+// MARK: - The cards of Home
 
-/// "50 K", "2.6 M", "356 G": ServerCat's short byte counts.
-enum ShortBytes {
-    static func pair(_ bytes: Double) -> (value: String, unit: String) {
-        let units = ["B", "K", "M", "G", "T", "P"]
-        var value = max(0, bytes.isFinite ? bytes : 0)
-        var index = 0
-        while value >= 1000, index < units.count - 1 {
-            value /= 1000
-            index += 1
-        }
-        let text = index == 0 || value >= 10 ? String(Int(value.rounded())) : String(format: "%.1f", value)
-        return (text, units[index])
+/// Home's body: an empty state before the first server, the cards that match
+/// the group filter and search, or a note that none do. The app wraps it in
+/// its page (toolbar, inspector) and supplies the cards' menus.
+public struct ServerCardsGrid<More: View, Context: View>: View {
+    let search: String
+    @Binding var selection: RDMachine.ID?
+    let more: (RDMachine.ID) -> More
+    let context: (RDMachine.ID) -> Context
+
+    @EnvironmentObject var store: TamioStore
+    @Environment(\.serverActions) private var actions
+    @ObservedObject private var filterStore = HomeGroupFilterStore.shared
+
+    public init(
+        search: String,
+        selection: Binding<RDMachine.ID?>,
+        @ViewBuilder more: @escaping (RDMachine.ID) -> More,
+        @ViewBuilder context: @escaping (RDMachine.ID) -> Context
+    ) {
+        self.search = search
+        _selection = selection
+        self.more = more
+        self.context = context
     }
 
-    static func string(_ bytes: Double) -> String {
-        let pair = pair(bytes)
-        return "\(pair.value) \(pair.unit)"
-    }
-}
-
-/// A bold number with a small grey unit; green when not zero.
-struct ValueText: View {
-    let value: String
-    let unit: String
-    let active: Bool
-
-    init(_ value: String, unit: String, active: Bool) {
-        self.value = value
-        self.unit = unit
-        self.active = active
+    var filter: HomeGroupFilter {
+        filterStore.selection.resolved(in: store.machineGroup.machines)
     }
 
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 2) {
-            Text(value)
-                .font(.system(size: 13, weight: .bold).monospacedDigit())
-                .foregroundStyle(active ? Color.rxSuccess : Color.rxInkSecondary)
-                .contentTransition(.numericText())
-            if !unit.isEmpty {
-                Text(unit)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.rxInkSecondary)
+    public var body: some View {
+        let machines = filter.machines(in: store, search: search)
+        if store.machineGroup.machines.isEmpty {
+            EmptyStateView(
+                "Save a server to reach it in one click",
+                systemImage: "server.rack",
+                message: "Its live load, CPU, memory, disk and traffic show here, and it opens a terminal or files in one click.",
+                actionTitle: "New Server"
+            ) {
+                actions.newServer()
+            }
+            .frame(maxWidth: .infinity)
+            .rxCard()
+        } else if machines.isEmpty {
+            EmptyStateView(filter.noMatchTitle(for: search), systemImage: "magnifyingglass")
+                .rxCard()
+        } else {
+            CardGrid(minimumWidth: StatusCardMetrics.minimumWidth, spacing: RX.Space.s3) {
+                ForEach(machines) { machine in
+                    // A click shows the card's server in the panel; the panel's
+                    // close button and Esc put it away.
+                    StatusCard(machine: machine.id, selected: selection == machine.id, select: {
+                        if selection != machine.id { selection = machine.id }
+                    }, more: { more(machine.id) }, context: { context(machine.id) })
+                }
             }
         }
-        .animation(.easeOut(duration: 0.3), value: value)
-    }
-}
-
-struct BytesText: View {
-    let bytes: Double
-    init(_ bytes: Double) { self.bytes = bytes }
-
-    var body: some View {
-        let pair = RXFormat.bytes(bytes)
-        ValueText(pair.value, unit: pair.unit, active: bytes > 0)
-    }
-}
-
-/// A ring with the percentage inside: used in the threshold colour, an
-/// optional grey arc after it (memory cache), the rest light.
-struct RingGauge: View {
-    let fraction: Double
-    var cache: Double = 0
-    var empty = false
-
-    var body: some View {
-        let used = min(max(fraction.isFinite ? fraction : 0, 0), 1)
-        let cached = min(max(cache.isFinite ? cache : 0, 0), 1 - used)
-        ZStack {
-            Circle()
-                .stroke(Color.rxHairline, lineWidth: 4)
-            Circle()
-                .trim(from: used, to: used + cached)
-                .stroke(Color.rxInkTertiary, style: StrokeStyle(lineWidth: 4, lineCap: .butt))
-                .rotationEffect(.degrees(-90))
-            Circle()
-                .trim(from: 0, to: used)
-                .stroke(rxUsageColor(used * 100, base: .rxSuccess), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            Text(empty ? "—" : "\(RXFormat.percent(used * 100))%")
-                .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.rxInkSecondary)
-                .contentTransition(.numericText())
-        }
-        .frame(width: 40, height: 40)
-        .animation(.easeOut(duration: 0.5), value: used)
-    }
-}
-
-/// Load as three concentric rings, 1, 5 and 15 minutes from the outside in,
-/// each full at one task per core.
-struct LoadRings: View {
-    let load: (Double, Double, Double)
-    let cores: Int
-
-    var body: some View {
-        let values = [load.0, load.1, load.2].map { min(max($0 / Double(cores), 0), 1) }
-        ZStack {
-            ForEach(0 ..< 3, id: \.self) { ring in
-                let size = 40 - CGFloat(ring) * 11
-                Circle()
-                    .stroke(Color.rxHairline, lineWidth: 4)
-                    .frame(width: size, height: size)
-                Circle()
-                    .trim(from: 0, to: max(values[ring], 0.015))
-                    .stroke(rxUsageColor(values[ring] * 100, base: .rxSuccess), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: size, height: size)
-            }
-        }
-        .frame(width: 40, height: 40)
-        .animation(.easeOut(duration: 0.5), value: values)
-        .help(String(localized: "Load \(String(format: "%.2f", load.0)) · \(String(format: "%.2f", load.1)) · \(String(format: "%.2f", load.2)) on \(cores) cores"))
-    }
-}
-
-/// The first of its children whose ideal width fits the width proposed, as
-/// ViewThatFits in the horizontal axis. The children are measured at their
-/// ideal size, the same proposal every time, so SwiftUI's cache answers;
-/// ViewThatFits measures them at each width it is given, and a sidebar
-/// sliding over a page of cards gives it a new one every frame.
-struct FirstThatFits: Layout {
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
-        guard let chosen = chosen(proposal, subviews) else { return .zero }
-        return subviews[chosen].sizeThatFits(.unspecified)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
-        let chosen = chosen(proposal, subviews)
-        for (index, subview) in subviews.enumerated() {
-            if index == chosen {
-                subview.place(at: bounds.origin, anchor: .topLeading, proposal: .unspecified)
-            } else {
-                // Out of the window, at no size: a layout places every child.
-                subview.place(at: CGPoint(x: -100_000, y: -100_000), anchor: .topLeading, proposal: .zero)
-            }
-        }
-    }
-
-    private func chosen(_ proposal: ProposedViewSize, _ subviews: Subviews) -> Int? {
-        guard !subviews.isEmpty else { return nil }
-        guard let width = proposal.width else { return 0 }
-        return subviews.indices.first { subviews[$0].sizeThatFits(.unspecified).width <= width } ?? subviews.count - 1
     }
 }

@@ -94,41 +94,7 @@ enum ServerActions {
     }
 }
 
-/// The four ways into a server. Every surface that opens one (tiles, table rows,
-/// context menus, the session switcher, the sidebar) uses these names, symbols and
-/// descriptions, so a button means the same thing wherever it appears.
-enum ServerTool: CaseIterable, Identifiable {
-    case terminal
-    case files
-    case monitor
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .terminal: return String(localized: "Terminal")
-        case .files: return String(localized: "Files")
-        case .monitor: return String(localized: "Monitor")
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .terminal: return "terminal"
-        case .files: return "folder"
-        case .monitor: return "gauge.with.dots.needle.33percent"
-        }
-    }
-
-    /// Tooltip: what the tool does, in a sentence.
-    var help: LocalizedStringKey {
-        switch self {
-        case .terminal: return "Open an SSH terminal on this server"
-        case .files: return "Browse, upload and download files over SFTP"
-        case .monitor: return "Watch CPU, memory, disk and network usage"
-        }
-    }
-
+extension ServerTool {
     /// Shows this tool for the server, reusing a session that is already open.
     @MainActor
     func show(_ machine: RDMachine.ID) {
@@ -143,6 +109,25 @@ enum ServerTool: CaseIterable, Identifiable {
         case .files: router.openFileTransfer(machine: machine)
         case .monitor: router.openMonitor(machine: machine)
         }
+    }
+}
+
+extension ServerActionHandlers {
+    /// What the shared server views do on the Mac: routes, dialogs, the
+    /// pasteboard.
+    @MainActor static var mac: ServerActionHandlers {
+        ServerActionHandlers(
+            openTerminal: { ServerTool.terminal.show($0) },
+            openTerminalRunning: { AppRouter.shared.openTerminal(machine: $0, initialCommand: $1) },
+            openFiles: { ServerTool.files.show($0) },
+            openMonitor: { ServerTool.monitor.show($0) },
+            edit: { ServerActions.edit($0) },
+            newServer: { AppRouter.shared.presentNewServer = true },
+            copy: { Dialogs.sendPasteboard(str: $0) },
+            confirm: { message, informative, confirmTitle, destructive, completion in
+                Dialogs.requiresConfirmation(message: message, informative: informative, confirmTitle: confirmTitle, destructive: destructive, confirmation: completion)
+            }
+        )
     }
 }
 
@@ -216,57 +201,6 @@ struct ServerContextMenu: View {
                 Label("Delete…", systemImage: "trash")
             }
         }
-    }
-}
-
-/// Live figures of a server while its monitor is open.
-struct ServerLiveState {
-    var cpu: Double?
-    var memory: Double?
-    var disk: Double?
-    var receive: Double?
-    var transmit: Double?
-
-    /// From the server's open monitor, else its background status.
-    @MainActor
-    static func of(_ machine: RDMachine.ID) -> ServerLiveState {
-        guard let session = LiveStatusCenter.shared.session(for: machine),
-              session.phase == .connected, session.status.hasData
-        else { return ServerLiveState() }
-        let status = session.status
-        let root = status.fileSystem.elements.first { $0.mountPoint == "/" }
-            ?? status.fileSystem.elements.max { $0.percent < $1.percent }
-        let physical = status.network.elements.filter { !NetworkFilter.isVirtual($0.device) }
-        return ServerLiveState(
-            cpu: Double(status.processor.summary.sumUsed),
-            memory: status.memoryUsedPercent,
-            disk: root.map { Double($0.percent) },
-            receive: Double(physical.map(\.rxBytesPerSec).reduce(0, +)),
-            transmit: Double(physical.map(\.txBytesPerSec).reduce(0, +))
-        )
-    }
-}
-
-/// Re-renders its content as the server's status changes.
-struct ServerLiveReader<Content: View>: View {
-    let machine: RDMachine.ID
-    @ViewBuilder let content: (ServerLiveState) -> Content
-
-    @ObservedObject private var live = LiveStatusCenter.shared
-    @ObservedObject private var monitors = MonitorCenter.shared
-
-    var body: some View {
-        if let session = live.session(for: machine) {
-            SessionReader(session: session) { content(ServerLiveState.of(machine)) }
-        } else {
-            content(ServerLiveState.of(machine))
-        }
-    }
-
-    private struct SessionReader<Inner: View>: View {
-        @ObservedObject var session: MonitorSession
-        @ViewBuilder let inner: () -> Inner
-        var body: some View { inner() }
     }
 }
 
