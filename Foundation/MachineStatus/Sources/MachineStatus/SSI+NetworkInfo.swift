@@ -47,10 +47,9 @@ public extension ServerStatus {
             self.elements = elements
         }
 
-        /// Builds from two `/proc/net/dev` payloads sampled about a second
-        /// apart; rates are the counter deltas, so the sampling gap is
-        /// exactly the script's sleep.
-        public init?(netDevBefore: String?, netDevAfter: String?) {
+        /// Builds from two `/proc/net/dev` payloads sampled `interval`
+        /// seconds apart.
+        public init?(netDevBefore: String?, netDevAfter: String?, interval: Double = 1) {
             guard let netDevBefore, let netDevAfter else { return nil }
 
             typealias RxTxPair = (Int, Int)
@@ -101,7 +100,9 @@ public extension ServerStatus {
                         continue
                     }
                     result.append(NetworkInfoElement(
-                        device: item.key, rxBytesPerSec: rxIncrease, txBytesPerSec: txIncrease,
+                        device: item.key,
+                        rxBytesPerSec: Self.perSecond(rxIncrease, over: interval),
+                        txBytesPerSec: Self.perSecond(txIncrease, over: interval),
                         rxBytesTotal: target.0, txBytesTotal: target.1
                     ))
                 }
@@ -115,7 +116,7 @@ public extension ServerStatus {
         /// Builds from two macOS `netstat -ibn` samples. Only link-level
         /// rows are used so each interface appears once, without its IPv4 and
         /// IPv6 aliases duplicating the same counters.
-        public init?(netstatBefore: String?, netstatAfter: String?) {
+        public init?(netstatBefore: String?, netstatAfter: String?, interval: Double = 1) {
             guard let netstatBefore, let netstatAfter else { return nil }
             let before = ProcParsers.parseDarwinNetstat(netstatBefore)
             let after = ProcParsers.parseDarwinNetstat(netstatAfter)
@@ -125,11 +126,19 @@ public extension ServerStatus {
                 let txIncrease = current.tx - previous.tx
                 guard rxIncrease >= 0, txIncrease >= 0 else { return nil }
                 return NetworkInfoElement(
-                    device: device, rxBytesPerSec: rxIncrease, txBytesPerSec: txIncrease,
+                    device: device,
+                    rxBytesPerSec: Self.perSecond(rxIncrease, over: interval),
+                    txBytesPerSec: Self.perSecond(txIncrease, over: interval),
                     rxBytesTotal: current.rx, txBytesTotal: current.tx
                 )
             }
             self.init(elements: result.sorted { $0.device < $1.device })
+        }
+
+        /// A counter's growth over `interval` seconds, per second.
+        static func perSecond(_ delta: Int, over interval: Double) -> Int {
+            guard interval > 0, interval != 1 else { return delta }
+            return Int((Double(delta) / interval).rounded())
         }
     }
 }

@@ -37,6 +37,23 @@ final class DiskIOInfoTests: XCTestCase {
         XCTAssertEqual(info.writeBytesPerSec, 4096 * 512)
     }
 
+    func testRatesScaleToTheSamplingInterval() throws {
+        // Samples five seconds apart: the same deltas are a fifth per second.
+        let info = ServerStatus.DiskIOInfo(diskstatsBefore: before, diskstatsAfter: after, interval: 5)
+        let nvme = try XCTUnwrap(info.devices.first { $0.name == "nvme0n1" })
+        XCTAssertEqual(nvme.readBytesPerSec, 400 * 512 / 5)
+        XCTAssertEqual(nvme.readOpsPerSec, 2)
+        XCTAssertEqual(nvme.writeOpsPerSec, 4)
+        // Waits are per operation, not per second.
+        XCTAssertEqual(nvme.readWaitMs, 3, accuracy: 0.001)
+        let a = "Inter-|Receive\n face |bytes\n  eth0: 1000 10 0 0 0 0 0 0 5000 20 0 0 0 0 0 0\n"
+        let b = "Inter-|Receive\n face |bytes\n  eth0: 4000 10 0 0 0 0 0 0 5600 20 0 0 0 0 0 0\n"
+        let network = try XCTUnwrap(ServerStatus.NetworkInfo(netDevBefore: a, netDevAfter: b, interval: 3))
+        XCTAssertEqual(network.elements.first?.rxBytesPerSec, 1000)
+        XCTAssertEqual(network.elements.first?.txBytesPerSec, 200)
+        XCTAssertEqual(network.elements.first?.rxBytesTotal, 4000)
+    }
+
     func testMissingSamplesGiveNoDevices() {
         XCTAssertTrue(ServerStatus.DiskIOInfo(diskstatsBefore: nil, diskstatsAfter: after).devices.isEmpty)
     }

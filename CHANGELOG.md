@@ -13,6 +13,17 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+### Changed
+- **Live status costs the server less.** A refresh used to hold the server
+  for a second to sample its counters twice; now only the first refresh of a
+  connection does, and the rates of every later one come from the previous
+  refresh's sample, so a round is a single read with no wait. Linux reads
+  only the cpu rows of /proc/stat (the interrupt row ran to tens of
+  kilobytes on large servers), and the quiet sessions behind the server
+  cards, the Servers table and the menu bar read the summary alone: no
+  per-core rows, disk I/O, TCP counters, addresses or GPU probe. Those are
+  read for the monitor page, and for the inspector while it is open.
+
 ## [0.2.13] - 2026-10-21
 
 ### Added

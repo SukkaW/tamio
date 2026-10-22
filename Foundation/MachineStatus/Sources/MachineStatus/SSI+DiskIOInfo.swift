@@ -86,7 +86,9 @@ public extension ServerStatus {
             return true
         }
 
-        public init(diskstatsBefore: String?, diskstatsAfter: String?) {
+        /// Builds from two `/proc/diskstats` payloads sampled `interval`
+        /// seconds apart.
+        public init(diskstatsBefore: String?, diskstatsAfter: String?, interval: Double = 1) {
             guard let diskstatsBefore, let diskstatsAfter else {
                 self.init()
                 return
@@ -100,12 +102,13 @@ public extension ServerStatus {
                 guard now.reads + now.writes > 0 else { return nil }
                 let reads = max(0, now.reads - then.reads)
                 let writes = max(0, now.writes - then.writes)
+                let perSecond = NetworkInfo.perSecond
                 return Device(
                     name: name,
-                    readBytesPerSec: max(0, now.sectorsRead - then.sectorsRead) * 512,
-                    writeBytesPerSec: max(0, now.sectorsWritten - then.sectorsWritten) * 512,
-                    readOpsPerSec: reads,
-                    writeOpsPerSec: writes,
+                    readBytesPerSec: perSecond(max(0, now.sectorsRead - then.sectorsRead) * 512, interval),
+                    writeBytesPerSec: perSecond(max(0, now.sectorsWritten - then.sectorsWritten) * 512, interval),
+                    readOpsPerSec: perSecond(reads, interval),
+                    writeOpsPerSec: perSecond(writes, interval),
                     readBytesTotal: now.sectorsRead * 512,
                     writeBytesTotal: now.sectorsWritten * 512,
                     readWaitMs: reads > 0 ? Double(max(0, now.msReading - then.msReading)) / Double(reads) : 0,

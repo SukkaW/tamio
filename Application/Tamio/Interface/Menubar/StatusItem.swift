@@ -36,7 +36,8 @@ class MenubarStatusItem: NSObject, Identifiable {
     init(machine: RDMachine, identity: RDIdentity?, session: MonitorSession? = nil) {
         self.machine = machine
         self.identity = identity
-        self.session = session ?? MonitorSession(machine: machine, identity: identity)
+        // The menu bar shows the summary; its own session reads no more.
+        self.session = session ?? MonitorSession(machine: machine, identity: identity, detailed: false)
         var toggle: (() -> Void)?
         item = MacStatusItem(
             toolTip: machine.name,

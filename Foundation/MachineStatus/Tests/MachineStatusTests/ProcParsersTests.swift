@@ -199,16 +199,55 @@ final class ProcParsersTests: XCTestCase {
         XCTAssertEqual(ProcParsers.parseUptime(sections["uptime"] ?? ""), 42)
     }
 
+    private func count(_ needle: String, in script: String) -> Int {
+        script.components(separatedBy: needle).count - 1
+    }
+
+    private func marker(_ section: String) -> String {
+        "echo '\(ServerStatus.sectionMarkerPrefix)\(section)\(ServerStatus.sectionMarkerSuffix)'"
+    }
+
     func testMonitorScriptSamplesCountersTwiceAroundOneSleep() {
         let script = ServerStatus.monitorScript(includeStatic: true)
-        XCTAssertEqual(script.components(separatedBy: "/bin/cat /proc/stat").count - 1, 2)
-        XCTAssertEqual(script.components(separatedBy: "/bin/cat /proc/net/dev").count - 1, 2)
-        XCTAssertEqual(script.components(separatedBy: "/bin/sleep 1").count - 1, 1)
-        for section in ["cpu-a", "net-a", "cpu-b", "net-b", "mem", "df", "uptime", "loadavg", "hostname", "os-release"] {
-            XCTAssertTrue(
-                script.contains("echo '\(ServerStatus.sectionMarkerPrefix)\(section)\(ServerStatus.sectionMarkerSuffix)'"),
-                "missing marker for \(section)"
-            )
+        XCTAssertEqual(count("< /proc/stat", in: script), 2)
+        XCTAssertEqual(count("/bin/cat /proc/net/dev", in: script), 2)
+        XCTAssertEqual(count("/bin/cat /proc/diskstats", in: script), 2)
+        XCTAssertEqual(count("/bin/sleep 1", in: script), 1)
+        for section in ["cpu-a", "net-a", "disk-a", "cpu-b", "net-b", "disk-b", "mem", "df", "uptime", "loadavg", "ncpu", "snmp", "addr", "hostname", "os-release"] {
+            XCTAssertTrue(script.contains(marker(section)), "missing marker for \(section)")
+        }
+        // Only the cpu rows: the intr row is long and unused.
+        XCTAssertTrue(script.contains("case \"$TAMIO_LINE\" in cpu*)"))
+    }
+
+    func testMonitorScriptSampledRoundReadsCountersOnceWithoutSleeping() {
+        let script = ServerStatus.monitorScript(includeStatic: false, sampled: true)
+        XCTAssertEqual(count("< /proc/stat", in: script), 1)
+        XCTAssertEqual(count("/bin/cat /proc/net/dev", in: script), 1)
+        XCTAssertEqual(count("/bin/cat /proc/diskstats", in: script), 1)
+        XCTAssertEqual(count("/bin/sleep", in: script), 0)
+        for section in ["cpu-a", "net-a", "disk-a", "wait"] {
+            XCTAssertFalse(script.contains(marker(section)), "unexpected marker for \(section)")
+        }
+        for section in ["cpu-b", "net-b", "disk-b", "mem", "df", "uptime", "loadavg", "ncpu"] {
+            XCTAssertTrue(script.contains(marker(section)), "missing marker for \(section)")
+        }
+        // The Mac's top samples twice on its own.
+        XCTAssertTrue(script.contains("/usr/bin/top -l 2 -n 0 -s 1"))
+    }
+
+    func testMonitorScriptSummaryReadsOnlyWhatTheCardsShow() {
+        let script = ServerStatus.monitorScript(includeStatic: false, scope: .summary)
+        for section in ["disk-a", "disk-b", "snmp", "addr"] {
+            XCTAssertFalse(script.contains(marker(section)), "unexpected marker for \(section)")
+        }
+        XCTAssertFalse(script.contains("diskstats"))
+        XCTAssertFalse(script.contains("ip -o -4"))
+        // The first row of /proc/stat is the total; no per-core rows.
+        XCTAssertTrue(script.contains("read -r TAMIO_LINE < /proc/stat"))
+        XCTAssertFalse(script.contains("case \"$TAMIO_LINE\" in cpu*)"))
+        for section in ["cpu-a", "net-a", "cpu-b", "net-b", "mem", "df", "uptime", "loadavg", "ncpu"] {
+            XCTAssertTrue(script.contains(marker(section)), "missing marker for \(section)")
         }
     }
 
@@ -216,7 +255,39 @@ final class ProcParsersTests: XCTestCase {
         let script = ServerStatus.monitorScript(includeStatic: false)
         XCTAssertFalse(script.contains("os-release"))
         XCTAssertFalse(script.contains("hostname"))
-        XCTAssertEqual(script.components(separatedBy: "/bin/sleep 1").count - 1, 1)
+        XCTAssertEqual(count("/bin/sleep 1", in: script), 1)
+    }
+
+    func testMonitorScriptCpuRowsRunInShell() throws {
+        // The cpu rows come out of /bin/sh's builtins alone, as the script
+        // writes them; the Mac's sh is the same POSIX shell a server runs.
+        let stat = """
+        cpu  100 0 200 1600 50 0 10 0 0 0
+        cpu0 50 0 100 800 25 0 5 0 0 0
+        intr 12345 0 0 0 0 0 0 0 0 0 0 0
+        ctxt 999
+        """
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("tamio-stat-\(UUID().uuidString)")
+        try stat.write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+        for (scope, expected) in [(ServerStatus.Scope.full, "cpu  100 0 200 1600 50 0 10 0 0 0\ncpu0 50 0 100 800 25 0 5 0 0 0"), (.summary, "cpu  100 0 200 1600 50 0 10 0 0 0")] {
+            // The whole script, told it is on Linux; the other /proc reads
+            // fail quietly here and only the cpu section is checked.
+            let script = ServerStatus.monitorScript(includeStatic: false, scope: scope, sampled: true)
+                .replacingOccurrences(of: "$(/usr/bin/uname -s)", with: "Linux")
+                .replacingOccurrences(of: "/proc/stat", with: file.path)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", script]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            process.waitUntilExit()
+            let cpu = try XCTUnwrap(ProcParsers.splitMonitorSections(output)["cpu-b"])
+            XCTAssertEqual(cpu.trimmingCharacters(in: .whitespacesAndNewlines), expected)
+        }
     }
 
     // MARK: - /proc/uptime

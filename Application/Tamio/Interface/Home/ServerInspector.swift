@@ -61,6 +61,10 @@ struct ServerInspector: View {
                 switch tab {
                 case .overview:
                     ScrollView { InspectorOverview(session: session).padding(.horizontal, RX.Space.s4).padding(.bottom, RX.Space.s4) }
+                        // Disk I/O, TCP and addresses are read only while shown.
+                        .id(session.id)
+                        .onAppear { session.holdDetail() }
+                        .onDisappear { session.releaseDetail() }
                 case .processes:
                     ProcessList(session: session, machine: machine)
                 case .containers:

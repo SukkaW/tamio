@@ -10,6 +10,7 @@ import Combine
 import Foundation
 import MachineStatus
 import NSRemoteShell
+import os
 import TamioModule
 
 /// Samples collected by the app while a monitor is open (one per refresh).
@@ -104,10 +105,30 @@ public final class MonitorSession: ObservableObject, Identifiable, Equatable {
 
     private static let queue = DispatchQueue(label: "sb.moe.tamio.monitor", attributes: .concurrent)
 
-    public init(machine: RDMachine, identity: RDIdentity?, recordsConnection: Bool = true) {
+    /// What the session reads each round. A monitor page reads everything;
+    /// the quiet sessions behind the cards read the summary, and the whole
+    /// while the inspector (which shows disk I/O, TCP and addresses) holds
+    /// one open with `holdDetail`.
+    public var scope: ServerStatus.Scope {
+        detailHolders.withLock { $0 > 0 } ? .full : .summary
+    }
+
+    private let detailHolders: OSAllocatedUnfairLock<Int>
+
+    /// Has the session read every reading until the matching `releaseDetail`.
+    public func holdDetail() {
+        detailHolders.withLock { $0 += 1 }
+    }
+
+    public func releaseDetail() {
+        detailHolders.withLock { $0 = max(0, $0 - 1) }
+    }
+
+    public init(machine: RDMachine, identity: RDIdentity?, recordsConnection: Bool = true, detailed: Bool = true) {
         self.machine = machine
         self.identity = identity
         self.recordsConnection = recordsConnection
+        detailHolders = .init(initialState: detailed ? 1 : 0)
         shell = NSRemoteShell.configured(for: machine, timeout: TamioStore.shared.timeoutNumber)
         // Re-publish nested status changes so one observer is enough.
         status.objectWillChange
@@ -129,6 +150,7 @@ public final class MonitorSession: ObservableObject, Identifiable, Equatable {
             self.machine = machine
             identity = nil
             recordsConnection = false
+            detailHolders = .init(initialState: 1)
             shell = NSRemoteShell()
             status.objectWillChange
                 .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -201,7 +223,8 @@ public final class MonitorSession: ObservableObject, Identifiable, Equatable {
                 }
                 let timeout = max(10, Double(refreshInterval * 2))
                 let round = RoundResult()
-                await blocking { round.read = self.status.requestInfoAndWait(with: self.shell, timeout: timeout) }
+                let scope = scope
+                await blocking { round.read = self.status.requestInfoAndWait(with: self.shell, timeout: timeout, scope: scope) }
                 #if DEBUG
                     Self.trace("\(machine.name) round \(round.read ? "read" : "empty") hasData \(status.hasData)")
                 #endif

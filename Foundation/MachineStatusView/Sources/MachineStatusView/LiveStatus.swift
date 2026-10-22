@@ -175,7 +175,7 @@ public final class LiveStatusCenter: ObservableObject {
             let fingerprint = Fingerprint(machine, identity)
             if sessions[machine.id] != nil, startedFrom[machine.id] == fingerprint { continue }
             sessions[machine.id]?.shutdown()
-            sessions[machine.id] = MonitorSession(machine: machine, identity: identity, recordsConnection: false)
+            sessions[machine.id] = MonitorSession(machine: machine, identity: identity, recordsConnection: false, detailed: false)
             startedFrom[machine.id] = fingerprint
         }
     }

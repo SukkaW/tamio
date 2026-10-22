@@ -62,31 +62,68 @@ public class ServerStatus: ObservableObject, Equatable {
     /// most machines, and its failure must not cost the other sections.
     static let graphicsScript = "nvidia-smi -q -x | tr -d \"[\\t\\n]\" || echo \"no nvidia gpu available\""
 
-    /// One remote run that samples the CPU and network counters twice one
-    /// second apart and reads every other payload behind markers, so a
-    /// refresh costs one exec channel instead of nine and one remote second
-    /// instead of two. Linux reads /proc; Darwin uses its native tools.
+    /// How much a refresh reads.
+    public enum Scope: Sendable {
+        /// What a server card, the Servers table and the menu bar show: the
+        /// CPU total, memory, file systems, network rates, load and uptime.
+        case summary
+        /// Every reading: each core, disk I/O, TCP counters, addresses and
+        /// the GPU, for the monitor page and the inspector.
+        case full
+    }
+
+    /// One remote run that reads every payload behind markers, so a
+    /// refresh costs one exec channel instead of nine. Linux reads /proc;
+    /// Darwin uses its native tools.
+    ///
+    /// The CPU, network and disk counters are rates, so they need two
+    /// samples. The first round takes both itself, a second apart; the
+    /// rounds after it (`sampled`) read the counters once and the rates
+    /// come from the previous round's sample, so a refresh takes no remote
+    /// time at all and holds the channel for the reads alone. Linux reads
+    /// only the cpu rows of /proc/stat: its intr row can run to tens of
+    /// kilobytes on a large server, and nothing uses it. A `summary` read
+    /// skips the per-core rows, the disk, TCP and address payloads.
     /// Static payloads join only while `includeStatic` — they cannot change
     /// while a connection stays up.
-    static func monitorScript(includeStatic: Bool) -> String {
-        var sections = [
-            ("platform", "echo \"$TAMIO_KERNEL\""),
-            ("cpu-a", "if [ \"$TAMIO_KERNEL\" != Darwin ]; then /bin/cat /proc/stat; fi"),
-            ("net-a", "if [ \"$TAMIO_KERNEL\" = Darwin ]; then /usr/sbin/netstat -ibn; else /bin/cat /proc/net/dev; fi"),
-            ("disk-a", "if [ \"$TAMIO_KERNEL\" != Darwin ]; then /bin/cat /proc/diskstats 2>/dev/null; fi"),
-            ("darwin-top", "if [ \"$TAMIO_KERNEL\" = Darwin ]; then /usr/bin/top -l 2 -n 0 -s 1; fi"),
-            ("wait", "if [ \"$TAMIO_KERNEL\" != Darwin ]; then /bin/sleep 1; fi"),
-            ("cpu-b", "if [ \"$TAMIO_KERNEL\" != Darwin ]; then /bin/cat /proc/stat; fi"),
-            ("disk-b", "if [ \"$TAMIO_KERNEL\" != Darwin ]; then /bin/cat /proc/diskstats 2>/dev/null; fi"),
-            ("net-b", "if [ \"$TAMIO_KERNEL\" = Darwin ]; then /usr/sbin/netstat -ibn; else /bin/cat /proc/net/dev; fi"),
-            ("mem", "if [ \"$TAMIO_KERNEL\" = Darwin ]; then /usr/sbin/sysctl hw.memsize hw.pagesize vm.swapusage; /usr/bin/vm_stat; else /bin/cat /proc/meminfo; fi"),
-            ("df", "/bin/df -Pk"),
-            ("uptime", "if [ \"$TAMIO_KERNEL\" = Darwin ]; then /bin/date +%s; /usr/sbin/sysctl -n kern.boottime; else /bin/cat /proc/uptime; fi"),
-            ("loadavg", "if [ \"$TAMIO_KERNEL\" != Darwin ]; then /bin/cat /proc/loadavg; fi"),
-            ("ncpu", "getconf _NPROCESSORS_ONLN 2>/dev/null || /usr/sbin/sysctl -n hw.ncpu 2>/dev/null"),
-            ("snmp", "if [ \"$TAMIO_KERNEL\" != Darwin ]; then /bin/cat /proc/net/snmp 2>/dev/null; fi"),
-            ("addr", "if [ \"$TAMIO_KERNEL\" != Darwin ]; then ip -o -4 addr show 2>/dev/null; fi"),
+    static func monitorScript(includeStatic: Bool, scope: Scope = .full, sampled: Bool = false) -> String {
+        let linux = "if [ \"$TAMIO_KERNEL\" != Darwin ]; then"
+        let darwin = "if [ \"$TAMIO_KERNEL\" = Darwin ]; then"
+        // Shell builtins alone: no process for the kernel's own files.
+        let cpu = switch scope {
+        case .summary: "\(linux) read -r TAMIO_LINE < /proc/stat; echo \"$TAMIO_LINE\"; fi"
+        case .full: "\(linux) while read -r TAMIO_LINE; do case \"$TAMIO_LINE\" in cpu*) echo \"$TAMIO_LINE\";; esac; done < /proc/stat; fi"
+        }
+        let net = "\(darwin) /usr/sbin/netstat -ibn; else /bin/cat /proc/net/dev; fi"
+        let disk = "\(linux) /bin/cat /proc/diskstats 2>/dev/null; fi"
+        var sections: [(String, String)] = [("platform", "echo \"$TAMIO_KERNEL\"")]
+        if !sampled {
+            sections += [("cpu-a", cpu), ("net-a", net)]
+            if scope == .full { sections.append(("disk-a", disk)) }
+        }
+        // top's first sample is the average since boot; the second is live.
+        sections += [
+            ("darwin-top", "\(darwin) /usr/bin/top -l 2 -n 0 -s 1; fi"),
         ]
+        if !sampled {
+            sections.append(("wait", "\(linux) /bin/sleep 1; fi"))
+        }
+        sections += [("cpu-b", cpu)]
+        if scope == .full { sections.append(("disk-b", disk)) }
+        sections += [
+            ("net-b", net),
+            ("mem", "\(darwin) /usr/sbin/sysctl hw.memsize hw.pagesize vm.swapusage; /usr/bin/vm_stat; else /bin/cat /proc/meminfo; fi"),
+            ("df", "/bin/df -Pk"),
+            ("uptime", "\(darwin) /bin/date +%s; /usr/sbin/sysctl -n kern.boottime; else /bin/cat /proc/uptime; fi"),
+            ("loadavg", "\(linux) /bin/cat /proc/loadavg; fi"),
+            ("ncpu", "getconf _NPROCESSORS_ONLN 2>/dev/null || /usr/sbin/sysctl -n hw.ncpu 2>/dev/null"),
+        ]
+        if scope == .full {
+            sections += [
+                ("snmp", "\(linux) /bin/cat /proc/net/snmp 2>/dev/null; fi"),
+                ("addr", "\(linux) ip -o -4 addr show 2>/dev/null; fi"),
+            ]
+        }
         if includeStatic {
             sections += [
                 ("hostname", "/bin/hostname 2>/dev/null || hostname 2>/dev/null || echo \"localhost\""),
@@ -159,12 +196,27 @@ public class ServerStatus: ObservableObject, Equatable {
     private var sessionHostname: String?
     private var sessionReleaseName: String?
 
+    /// The counters the last round read, for the rates of the next one.
+    private struct Sample {
+        let scope: Scope
+        let cpu: String?
+        let net: String?
+        let disk: String?
+        /// When the read finished, by this Mac's clock: the remote spacing
+        /// between two reads is the same to within the round trip.
+        let at: Date
+    }
+
+    private var previousSample: Sample?
+
     /// Drops the once-per-connection static readings so the next refresh
-    /// pulls them again.
+    /// pulls them again, and the last counters: the rates of a new
+    /// connection start from a fresh pair of samples.
     public func resetSessionStatics() {
         staticsLock.lock()
         sessionHostname = nil
         sessionReleaseName = nil
+        previousSample = nil
         staticsLock.unlock()
     }
 
@@ -178,35 +230,58 @@ public class ServerStatus: ObservableObject, Equatable {
     /// while the Mac slept, say): the last readings are then kept, not
     /// replaced by empty ones, which would blank every view showing them.
     @discardableResult
-    public func requestInfoAndWait(with remote: NSRemoteShell, timeout: Double) -> Bool {
+    public func requestInfoAndWait(with remote: NSRemoteShell, timeout: Double, scope: Scope = .full) -> Bool {
         // The shell multiplexes channels internally; claiming it Sendable
         // is for the compiler, like the legacy model callbacks.
         nonisolated(unsafe) let remote = remote
         staticsLock.lock()
         let includeStatic = sessionHostname == nil || sessionReleaseName == nil
+        let previous = previousSample
         staticsLock.unlock()
         let group = DispatchGroup()
         let queue = Self.queue
 
         let mergedOutput = ConcurrentValue("")
+        let readAt = ConcurrentValue(Date())
         group.enter()
         queue.async {
             defer { group.leave() }
-            mergedOutput.store(Self.downloadResultFrom(shell: remote, command: Self.monitorScript(includeStatic: includeStatic), timeout: timeout))
+            // A summary sample has no per-core or disk rows to rate a full
+            // round against, so a round that widens the scope samples twice.
+            let sampled = previous.map { $0.scope == .full || scope == .summary } ?? false
+            let script = Self.monitorScript(includeStatic: includeStatic, scope: scope, sampled: sampled)
+            mergedOutput.store(Self.downloadResultFrom(shell: remote, command: script, timeout: timeout))
+            readAt.store(Date())
         }
 
+        // A GPU is a monitor page's reading; the cards never show one.
         let graphicsResult = ConcurrentValue<GraphicsInfo?>(nil)
-        group.enter()
-        queue.async {
-            defer { group.leave() }
-            graphicsResult.store(GraphicsInfo(withRemote: remote, timeout: timeout))
+        if scope == .full {
+            group.enter()
+            queue.async {
+                defer { group.leave() }
+                graphicsResult.store(GraphicsInfo(withRemote: remote, timeout: timeout))
+            }
         }
 
         group.wait()
 
-        let sections = ProcParsers.splitMonitorSections(mergedOutput.load())
+        var sections = ProcParsers.splitMonitorSections(mergedOutput.load())
         guard sections["mem"] != nil || sections["uptime"] != nil else { return false }
         let isDarwin = sections["platform"]?.trimmingCharacters(in: .whitespacesAndNewlines) == "Darwin"
+        // A sampled round's "before" is the last round's "after". The rates
+        // are then per second of the gap between the two reads; a first
+        // round's gap is the script's own second.
+        var interval = 1.0
+        if let previous, previous.scope == .full || scope == .summary {
+            sections["cpu-a"] = previous.cpu
+            sections["net-a"] = previous.net
+            sections["disk-a"] = previous.disk
+            interval = max(0.5, readAt.load().timeIntervalSince(previous.at))
+        }
+        staticsLock.lock()
+        previousSample = Sample(scope: scope, cpu: sections["cpu-b"], net: sections["net-b"], disk: sections["disk-b"], at: readAt.load())
+        staticsLock.unlock()
         if includeStatic {
             // Only a non-empty reading is cached; a failed probe is retried
             // on the next round instead of sticking a placeholder.
@@ -233,19 +308,19 @@ public class ServerStatus: ObservableObject, Equatable {
         let uptime: Double
         if isDarwin {
             processor = ProcessorInfo(darwinTop: sections["darwin-top"]) ?? .init()
-            network = NetworkInfo(netstatBefore: sections["net-a"], netstatAfter: sections["net-b"]) ?? .init()
+            network = NetworkInfo(netstatBefore: sections["net-a"], netstatAfter: sections["net-b"], interval: interval) ?? .init()
             memory = MemoryInfo(darwinMemory: sections["mem"] ?? "")
             load = ProcParsers.parseDarwinTopLoad(sections["darwin-top"] ?? "")
             uptime = ProcParsers.parseDarwinUptime(sections["uptime"] ?? "")
         } else {
             processor = ProcessorInfo(statBefore: sections["cpu-a"], statAfter: sections["cpu-b"]) ?? .init()
-            network = NetworkInfo(netDevBefore: sections["net-a"], netDevAfter: sections["net-b"]) ?? .init()
+            network = NetworkInfo(netDevBefore: sections["net-a"], netDevAfter: sections["net-b"], interval: interval) ?? .init()
             memory = MemoryInfo(meminfo: sections["mem"] ?? "")
             load = ProcParsers.parseLoadavg(sections["loadavg"] ?? "")
             uptime = ProcParsers.parseUptime(sections["uptime"] ?? "")
         }
         let fileSystem = FileSystemInfo(dfPk: sections["df"] ?? "")
-        let diskIO = isDarwin ? DiskIOInfo() : DiskIOInfo(diskstatsBefore: sections["disk-a"], diskstatsAfter: sections["disk-b"])
+        let diskIO = isDarwin ? DiskIOInfo() : DiskIOInfo(diskstatsBefore: sections["disk-a"], diskstatsAfter: sections["disk-b"], interval: interval)
         let tcp = TCPInfo(snmp: sections["snmp"] ?? "")
         let cpuCount = Int((sections["ncpu"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
         let addresses = Self.parseIPv4Addresses(sections["addr"] ?? "")
