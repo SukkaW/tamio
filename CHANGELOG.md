@@ -13,6 +13,8 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.15] - 2026-10-23
+
 ### Fixed
 - **A server can sign in with an SSH agent's key from its editor.** The Key
   picker lists identities that use an SSH agent next to stored keys, each
