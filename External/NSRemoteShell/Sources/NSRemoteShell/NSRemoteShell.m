@@ -1030,16 +1030,18 @@ static NSData *NSRAgentKeyBlob(NSString *publicKey) {
         return;
     }
     LIBSSH2_SESSION *session = self.associatedSession;
+    // What went wrong is shown to the user as is. This package has no strings
+    // of its own: NSLocalizedString reads the app's catalog in the main bundle.
     NSString *failure = nil;
     BOOL authenticated = NO;
     NSData *wanted = publicKey.length > 0 ? NSRAgentKeyBlob(publicKey) : nil;
     if (publicKey.length > 0 && !wanted) {
-        @synchronized (self) { self.lastError = @"The public key this identity names cannot be read."; }
+        @synchronized (self) { self.lastError = NSLocalizedString(@"The public key this identity names cannot be read.", nil); }
         return;
     }
     LIBSSH2_AGENT *agent = libssh2_agent_init(session);
     if (!agent) {
-        @synchronized (self) { self.lastError = @"Could not start talking to the SSH agent."; }
+        @synchronized (self) { self.lastError = NSLocalizedString(@"Could not start talking to the SSH agent.", nil); }
         return;
     }
     if (socketPath.length > 0) {
@@ -1048,12 +1050,12 @@ static NSData *NSRAgentKeyBlob(NSString *publicKey) {
     do {
         if (libssh2_agent_connect(agent) != 0) {
             failure = socketPath.length > 0
-                ? [NSString stringWithFormat:@"No SSH agent answers at %@. Is it running?", socketPath]
-                : @"No SSH agent answers at SSH_AUTH_SOCK. Is one running?";
+                ? [NSString stringWithFormat:NSLocalizedString(@"No SSH agent answers at %@. Is it running?", nil), socketPath]
+                : NSLocalizedString(@"No SSH agent answers at SSH_AUTH_SOCK. Is one running?", nil);
             break;
         }
         if (libssh2_agent_list_identities(agent) != 0) {
-            failure = @"The SSH agent did not list its keys.";
+            failure = NSLocalizedString(@"The SSH agent did not list its keys.", nil);
             break;
         }
         struct libssh2_agent_publickey *identity = NULL;
@@ -1075,7 +1077,7 @@ static NSData *NSRAgentKeyBlob(NSString *publicKey) {
             NSDate *deadline = [[NSDate alloc] initWithTimeIntervalSinceNow:25];
             while (true) {
                 if ([deadline timeIntervalSinceNow] < 0) {
-                    failure = @"The SSH agent did not sign in time. Was the request approved?";
+                    failure = NSLocalizedString(@"The SSH agent did not sign in time. Was the request approved?", nil);
                     break;
                 }
                 long rc = libssh2_agent_userauth(agent, [username UTF8String], identity);
@@ -1090,12 +1092,14 @@ static NSData *NSRAgentKeyBlob(NSString *publicKey) {
         }
         if (authenticated || failure) { break; }
         if (listed == 0) {
-            failure = @"The SSH agent holds no keys.";
+            failure = NSLocalizedString(@"The SSH agent holds no keys.", nil);
         } else if (wanted && offered == 0) {
-            failure = @"The SSH agent does not hold the key this identity names.";
+            failure = NSLocalizedString(@"The SSH agent does not hold the key this identity names.", nil);
         } else {
-            failure = [NSString stringWithFormat:@"The server did not accept %@ from the SSH agent as %@.",
-                       wanted ? @"the key" : @"any key", username];
+            failure = [NSString stringWithFormat:wanted
+                       ? NSLocalizedString(@"The server did not accept the key from the SSH agent as %@.", nil)
+                       : NSLocalizedString(@"The server did not accept any key from the SSH agent as %@.", nil),
+                       username];
         }
     } while (0);
     libssh2_agent_disconnect(agent);

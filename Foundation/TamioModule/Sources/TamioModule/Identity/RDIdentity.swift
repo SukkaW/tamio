@@ -165,10 +165,16 @@ public extension RDIdentity {
         set { attachment["private"] = newValue ? "1" : nil }
     }
 
+    /// "1Password" or "SSH agent" for an identity that uses an agent, nil
+    /// otherwise.
+    var agentName: String? {
+        guard usesAgent else { return nil }
+        return agentSocket == Self.onePasswordAgentSocket ? "1Password" : String(localized: "SSH agent")
+    }
+
     /// "Key pair · ed25519", "Password" style description.
     var authDescription: String {
-        if usesAgent {
-            let agent = agentSocket == Self.onePasswordAgentSocket ? "1Password" : String(localized: "SSH agent")
+        if let agent = agentName {
             if let type = keyAlgorithm { return "\(agent) · \(type)" }
             return agent
         }

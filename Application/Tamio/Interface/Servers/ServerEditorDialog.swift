@@ -208,9 +208,17 @@ struct ServerEditorDialog: View {
         }
     }
 
-    /// The identities that are SSH keys, for the key picker.
+    /// The identities that are SSH keys, stored or held by an agent, for the
+    /// key picker.
     var keys: [RDIdentity] {
-        store.identityGroup.shared.filter { !$0.privateKey.isEmpty }
+        store.identityGroup.shared.filter { !$0.privateKey.isEmpty || $0.usesAgent }
+    }
+
+    /// "work · 1Password · ED25519": an agent's keys name their agent, unless
+    /// the identity's name already does, so they stand apart from stored ones.
+    func keyTitle(_ identity: RDIdentity) -> String {
+        let agent = identity.agentName.flatMap { identity.displayName.contains($0) ? nil : $0 }
+        return [identity.displayName, agent, identity.keyAlgorithm?.uppercased()].compactMap { $0 }.joined(separator: " · ")
     }
 
     var credentialsSection: some View {
@@ -233,9 +241,7 @@ struct ServerEditorDialog: View {
                     HStack(spacing: RX.Space.s2) {
                         RXPicker(
                             selection: $draft.key,
-                            options: keys.map { item in
-                                .init(item.id, [item.displayName, item.keyAlgorithm?.uppercased()].compactMap { $0 }.joined(separator: " · "))
-                            },
+                            options: keys.map { .init($0.id, keyTitle($0)) },
                             placeholder: keys.isEmpty ? String(localized: "No keys yet") : String(localized: "Choose a key")
                         )
                         Button("New Key…") { addsKey = true }
@@ -246,7 +252,11 @@ struct ServerEditorDialog: View {
                 if let id = draft.key {
                     let key = store.identityGroup[id]
                     HStack(alignment: .top, spacing: RX.Space.s2) {
-                        HelpText("Signs in as \(trimmedUsername). The key is kept in Identities, for other servers too.")
+                        if key.usesAgent {
+                            HelpText("Signs in as \(trimmedUsername) with a key the SSH agent holds.")
+                        } else {
+                            HelpText("Signs in as \(trimmedUsername). The key is kept in Identities, for other servers too.")
+                        }
                         Spacer(minLength: 0)
                         if !key.publicKey.isEmpty {
                             Button("Copy Public Key") { Dialogs.sendPasteboard(str: key.publicKey) }
@@ -425,7 +435,7 @@ struct ServerEditorDialog: View {
             return
         }
         guard let identity, identity.hasCredentials else { return }
-        if identity.privateKey.isEmpty {
+        if identity.privateKey.isEmpty, !identity.usesAgent {
             // A password: the server's own, or a password identity from
             // before identities were keys only.
             draft.password = identity.password
@@ -574,7 +584,8 @@ struct ServerEditorDialog: View {
                 shell.authenticateWithoutCredentials(username)
             }
             let authenticated = shell.isAuthenticated
-            // What the server wants instead, when it would not take nothing.
+            // What the server wants instead, when it would not take nothing,
+            // or what the SSH agent said: not running, no such key, no approval.
             let wanted = authenticated ? nil : shell.getLastError()
             let banner = shell.remoteBanner ?? ""
             shell.requestDisconnectAndWait()
@@ -587,9 +598,14 @@ struct ServerEditorDialog: View {
                         AppRouter.shared.openTerminal(machine: created.id)
                     }
                 } else if let chosen {
-                    credentialsError = chosen.privateKey.isEmpty
-                        ? String(localized: "\(username) could not sign in to \(host) with this password.")
-                        : String(localized: "\(host) did not accept this key for \(username). Add its public key to ~/.ssh/authorized_keys there.")
+                    let refused = String(localized: "\(host) did not accept this key for \(username). Add its public key to ~/.ssh/authorized_keys there.")
+                    if chosen.usesAgent {
+                        credentialsError = wanted ?? refused
+                    } else {
+                        credentialsError = chosen.privateKey.isEmpty
+                            ? String(localized: "\(username) could not sign in to \(host) with this password.")
+                            : refused
+                    }
                 } else {
                     credentialsError = [String(localized: "\(host) did not let \(username) in without a password or key."), wanted]
                         .compactMap { $0 }.joined(separator: " ")
