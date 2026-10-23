@@ -30,6 +30,11 @@ the user. To release, rename that heading to the version and date
   an Agent) was laid out as tall as the text unwrapped, so the prompt ran
   past its card into Agent Activity and the Copy buttons sat on the
   dividers.
+- **The sidebar stays put when the window is shrunk.** After Settings, or
+  a terminal, Files or Monitor page, had been open in a larger window, the
+  page kept out of sight held the window's content at that size, so
+  shrinking the window from its left or bottom edge pushed the sidebar off
+  the left edge and the Settings row off the bottom.
 
 ## [0.2.13] - 2026-10-21
 

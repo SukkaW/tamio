@@ -197,10 +197,12 @@ private struct KeepsSizeWhileHidden: ViewModifier {
             .onGeometryChange(for: CGSize.self) { $0.size } action: { new in
                 if !hidden { size = new }
             }
-            // Takes whatever it is given, so a page held wider than the window
-            // overflows out of sight instead of widening the stack and
-            // pushing the page in view off centre.
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // Takes exactly what it is given, so a page held larger than the
+            // window overflows out of sight instead of widening the stack,
+            // which would push the sidebar and the page in view off the
+            // window's edges. Both bounds matter: a frame with only a maximum
+            // takes its child's size when the child is the larger.
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
