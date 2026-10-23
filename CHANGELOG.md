@@ -13,6 +13,8 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.16] - 2026-10-23
+
 ### Fixed
 - **RSA keys sign in to current OpenSSH servers.** OpenSSH 8.8 and later
   refuse RSA signatures made with SHA-1, the only kind Tamio made. RSA keys
