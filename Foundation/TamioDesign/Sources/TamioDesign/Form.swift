@@ -111,11 +111,20 @@ public struct RXRowLayout: Layout {
     static let oneLine: CGFloat = 20
 
     public struct Cache {
+        /// The control at the width it asks for, and the height it has there.
         var control: CGSize?
     }
 
+    /// Measured twice: once with nothing proposed, for the width the control
+    /// asks for, then at that width for its height. A control that wraps (a
+    /// block of text under a `maxWidth`) answers the first with the width of
+    /// its frame but the height of its unwrapped lines, and placed at that
+    /// width it would run past the row.
     public func makeCache(subviews: Subviews) -> Cache {
-        Cache(control: subviews.count > 1 ? subviews[1].sizeThatFits(.unspecified) : nil)
+        guard subviews.count > 1 else { return Cache(control: nil) }
+        let ideal = subviews[1].sizeThatFits(.unspecified)
+        let fitted = subviews[1].sizeThatFits(ProposedViewSize(width: ideal.width, height: nil))
+        return Cache(control: CGSize(width: ideal.width, height: fitted.height))
     }
 
     public func updateCache(_ cache: inout Cache, subviews: Subviews) {

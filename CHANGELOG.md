@@ -24,6 +24,13 @@ the user. To release, rename that heading to the version and date
   per-core rows, disk I/O, TCP counters, addresses or GPU probe. Those are
   read for the monitor page, and for the inspector while it is open.
 
+### Fixed
+- **Settings › MCP shows the whole prompt.** A settings row whose control
+  is a block of wrapped text (the Prompt, and the two commands under Set Up
+  an Agent) was laid out as tall as the text unwrapped, so the prompt ran
+  past its card into Agent Activity and the Copy buttons sat on the
+  dividers.
+
 ## [0.2.13] - 2026-10-21
 
 ### Added
