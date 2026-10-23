@@ -2,8 +2,9 @@
 //  SSHAgentAuthTests.swift
 //  TamioModuleTests
 //
-//  Signing in with a key an SSH agent holds, against a real sshd run as this
-//  user on a free local port, and a real ssh-agent holding a fresh key.
+//  Signing in with a key an SSH agent holds, or one the identity stores,
+//  against a real sshd run as this user on a free local port, and a real
+//  ssh-agent holding a fresh key.
 //
 
 #if os(macOS)
@@ -68,6 +69,28 @@
             let (shell, error) = signIn(with: agentIdentity())
             XCTAssertTrue(shell.isAuthenticated, error ?? "")
             shell.destroyPermanently()
+        }
+
+        // sshd takes RSA keys only with SHA-2 signatures, as OpenSSH has
+        // since 8.8.
+        func testAnRSAKeyTheAgentHoldsSignsIn() throws {
+            try authorizeNewKey("rsa", type: "rsa")
+            try addToAgent("rsa")
+            let (shell, error) = signIn(with: agentIdentity())
+            XCTAssertTrue(shell.isAuthenticated, error ?? "")
+            shell.destroyPermanently()
+        }
+
+        func testAStoredKeySignsIn() throws {
+            for type in ["ed25519", "rsa"] {
+                try authorizeNewKey(type, type: type)
+                var identity = RDIdentity()
+                identity.privateKey = try String(contentsOfFile: path(type), encoding: .utf8)
+                identity.publicKey = try String(contentsOfFile: path("\(type).pub"), encoding: .utf8)
+                let (shell, error) = signIn(with: identity)
+                XCTAssertTrue(shell.isAuthenticated, "\(type): \(error ?? "")")
+                shell.destroyPermanently()
+            }
         }
 
         func testANamedKeyIsTheOnlyOneOffered() throws {
@@ -136,6 +159,15 @@
 
         private func addToAgent(_ key: String) throws {
             try run("/usr/bin/ssh-add", "-q", path(key), environment: ["SSH_AUTH_SOCK": agentSocket])
+        }
+
+        private func authorizeNewKey(_ name: String, type: String) throws {
+            try run("/usr/bin/ssh-keygen", "-q", "-t", type, "-N", "", "-C", name, "-f", path(name))
+            let line = try String(contentsOfFile: path("\(name).pub"), encoding: .utf8)
+            let keys = try FileHandle(forWritingTo: URL(fileURLWithPath: path("authorized_keys")))
+            defer { try? keys.close() }
+            try keys.seekToEnd()
+            try keys.write(contentsOf: Data(line.utf8))
         }
 
         private func path(_ name: String) -> String {
