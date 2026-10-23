@@ -20,6 +20,15 @@
         }
       },
       {
+        "package": "OpenSSL",
+        "repositoryURL": "https://github.com/Lakr233/openssl-spm.git",
+        "state": {
+          "branch": null,
+          "revision": "eac8fdd510ebbcd410982d209a4b1dc67eb063ce",
+          "version": "4.0.1"
+        }
+      },
+      {
         "package": "Runestone",
         "repositoryURL": "https://github.com/simonbs/Runestone",
         "state": {
