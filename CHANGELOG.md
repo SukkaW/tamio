@@ -13,6 +13,14 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+### Fixed
+- **RSA keys sign in to current OpenSSH servers.** OpenSSH 8.8 and later
+  refuse RSA signatures made with SHA-1, the only kind Tamio made. RSA keys
+  now sign with SHA-256 or SHA-512 when the server takes them, whether the
+  identity stores the key or an SSH agent such as 1Password holds it. The
+  SSH library behind this is updated, with fixes for flaws a malicious
+  server could use against the connection.
+
 ## [0.2.15] - 2026-10-23
 
 ### Fixed

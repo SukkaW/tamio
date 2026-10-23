@@ -1,0 +1,15 @@
+{
+  "originHash" : "5fa6e512f97b7f9fd785ae4b136c0af7484f85ff8f47b5c955d5f7e37505eac0",
+  "pins" : [
+    {
+      "identity" : "openssl-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/openssl-spm.git",
+      "state" : {
+        "revision" : "eac8fdd510ebbcd410982d209a4b1dc67eb063ce",
+        "version" : "4.0.1"
+      }
+    }
+  ],
+  "version" : 3
+}
