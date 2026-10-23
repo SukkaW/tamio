@@ -13,6 +13,8 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.14] - 2026-10-23
+
 ### Changed
 - **Live status costs the server less.** A refresh used to hold the server
   for a second to sample its counters twice; now only the first refresh of a
