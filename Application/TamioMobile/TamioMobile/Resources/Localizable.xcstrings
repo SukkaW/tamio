@@ -21879,6 +21879,150 @@
           }
         }
       }
+    },
+    "The public key this identity names cannot be read.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The public key this identity names cannot be read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取此身份凭证指定的公钥。"
+          }
+        }
+      }
+    },
+    "Could not start talking to the SSH agent.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not start talking to the SSH agent."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法与 SSH 代理建立通信。"
+          }
+        }
+      }
+    },
+    "No SSH agent answers at %@. Is it running?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No SSH agent answers at %@. Is it running?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 上没有 SSH 代理响应。它在运行吗？"
+          }
+        }
+      }
+    },
+    "The SSH agent did not list its keys.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The SSH agent did not list its keys."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 代理没有列出它的密钥。"
+          }
+        }
+      }
+    },
+    "The SSH agent did not sign in time. Was the request approved?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The SSH agent did not sign in time. Was the request approved?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 代理没有及时签名。你批准这次请求了吗？"
+          }
+        }
+      }
+    },
+    "The SSH agent holds no keys.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The SSH agent holds no keys."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 代理中没有密钥。"
+          }
+        }
+      }
+    },
+    "The SSH agent does not hold the key this identity names.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The SSH agent does not hold the key this identity names."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 代理中没有此身份凭证指定的密钥。"
+          }
+        }
+      }
+    },
+    "The server did not accept the key from the SSH agent as %@.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server did not accept the key from the SSH agent as %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器不接受用户 %@ 使用 SSH 代理中的此密钥。"
+          }
+        }
+      }
+    },
+    "The server did not accept any key from the SSH agent as %@.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server did not accept any key from the SSH agent as %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器不接受用户 %@ 使用 SSH 代理中的任何密钥。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

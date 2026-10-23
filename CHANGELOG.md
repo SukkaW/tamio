@@ -13,6 +13,14 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+### Fixed
+- **A server can sign in with an SSH agent's key from its editor.** The Key
+  picker lists identities that use an SSH agent next to stored keys, each
+  named with its agent, such as 1Password. Editing a server that signs in
+  through an agent keeps that identity instead of turning it into an empty
+  password, and a sign-in the agent could not make says why, in the app's
+  language.
+
 ## [0.2.14] - 2026-10-23
 
 ### Changed
