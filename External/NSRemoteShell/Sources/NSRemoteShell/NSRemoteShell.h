@@ -17,12 +17,24 @@ NS_ASSUME_NONNULL_BEGIN
 /// `key` the public key as the server sent it. Called on the connecting thread.
 typedef BOOL (^NSRemoteShellHostKeyVerifier)(NSString *host, NSNumber *port, NSString *keyType, NSData *key);
 
+/// Names the host key algorithms to ask the address for first, as SSH names
+/// them ("ssh-ed25519", "ecdsa-sha2-nistp256", "rsa-sha2-512", ...). A server
+/// with several host keys presents the first kind the client lists, so the
+/// verifier sees the key it saved whatever order the library would try them
+/// in. The library's own order follows; nil or empty keeps it as it is.
+/// Called on the connecting thread.
+typedef NSArray<NSString *> * _Nullable (^NSRemoteShellHostKeyPreference)(NSString *host, NSNumber *port);
+
 @interface NSRemoteShell : NSObject
 
 /// Asked on every connection, after the handshake and before anything is sent
 /// to the server. When it answers NO the connection is closed. With none set,
 /// every host key is accepted.
 @property (class, nonatomic, nullable, copy) NSRemoteShellHostKeyVerifier hostKeyVerifier;
+
+/// Asked on every connection, before the handshake, for the host key
+/// algorithms to put first. See NSRemoteShellHostKeyPreference.
+@property (class, nonatomic, nullable, copy) NSRemoteShellHostKeyPreference hostKeyPreference;
 
 @property (nonatomic, readonly, getter=isConnected) BOOL connected;
 @property (nonatomic, readonly, getter=isConnectedFileTransfer) BOOL connectedFileTransfer;

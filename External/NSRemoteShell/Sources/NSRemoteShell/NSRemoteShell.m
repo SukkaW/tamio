@@ -70,6 +70,20 @@ static NSRemoteShellHostKeyVerifier sharedHostKeyVerifier;
     }
 }
 
+static NSRemoteShellHostKeyPreference sharedHostKeyPreference;
+
++ (NSRemoteShellHostKeyPreference)hostKeyPreference {
+    @synchronized ([NSRemoteShell class]) {
+        return sharedHostKeyPreference;
+    }
+}
+
++ (void)setHostKeyPreference:(NSRemoteShellHostKeyPreference)hostKeyPreference {
+    @synchronized ([NSRemoteShell class]) {
+        sharedHostKeyPreference = [hostKeyPreference copy];
+    }
+}
+
 static NSString *NSRemoteShellHostKeyTypeName(int type) {
     switch (type) {
         case LIBSSH2_HOSTKEY_TYPE_RSA: return @"ssh-rsa";
@@ -636,6 +650,42 @@ continue; \
 
 #pragma control
 
+/// Puts the host key algorithms the preference names ahead of libssh2's own
+/// order. A server with several host keys presents the first kind the client
+/// asks for, and libssh2's order has changed between versions: a key saved
+/// under one order would otherwise look like a changed key under the next.
+- (void)unsafePreferHostKeyAlgorithmsForSession:(LIBSSH2_SESSION *)session {
+    NSRemoteShellHostKeyPreference preference = [NSRemoteShell hostKeyPreference];
+    if (!preference) { return; }
+    NSArray<NSString *> *preferred = preference(self.remoteHost, self.remotePort);
+    if (preferred.count == 0) { return; }
+
+    const char **supported = NULL;
+    int count = libssh2_session_supported_algs(session, LIBSSH2_METHOD_HOSTKEY, &supported);
+    if (count <= 0 || !supported) { return; }
+    NSMutableArray<NSString *> *order = [[NSMutableArray alloc] initWithCapacity:count + preferred.count];
+    NSMutableSet<NSString *> *listed = [[NSMutableSet alloc] init];
+    for (NSString *name in preferred) {
+        if (name.length == 0 || [listed containsObject:name]) { continue; }
+        [listed addObject:name];
+        [order addObject:name];
+    }
+    for (int index = 0; index < count; index++) {
+        NSString *name = supported[index] ? [NSString stringWithUTF8String:supported[index]] : nil;
+        if (name.length == 0 || [listed containsObject:name]) { continue; }
+        [listed addObject:name];
+        [order addObject:name];
+    }
+    libssh2_free(session, supported);
+
+    // A name libssh2 does not know is dropped from the list by libssh2 itself.
+    NSString *prefs = [order componentsJoinedByString:@","];
+    int rc = libssh2_session_method_pref(session, LIBSSH2_METHOD_HOSTKEY, prefs.UTF8String);
+    if (rc != 0) {
+        NSRLog(@"host key preference %@ for %@ was not taken: %d", prefs, self.remoteHost, rc);
+    }
+}
+
 - (void)unsafeConnect {
     [self unsafeDisconnect];
     @synchronized (self) {
@@ -680,6 +730,7 @@ continue; \
     libssh2_session_set_timeout(constructorSession, [self.operationTimeout doubleValue] * 1000);
 
     libssh2_session_set_blocking(constructorSession, 0);
+    [self unsafePreferHostKeyAlgorithmsForSession:constructorSession];
     BOOL sessionHandshakeComplete = NO;
     NSDate *date = [[NSDate alloc] initWithTimeIntervalSinceNow:[self.operationTimeout intValue]];
     while (true) {

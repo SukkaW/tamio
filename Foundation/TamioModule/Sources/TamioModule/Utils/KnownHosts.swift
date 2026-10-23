@@ -45,6 +45,33 @@ public final class KnownHosts: @unchecked Sendable {
             let digest = Data(SHA256.hash(data: key)).base64EncodedString()
             return "SHA256:" + digest.replacingOccurrences(of: "=", with: "")
         }
+
+        /// The algorithm names under which a server presents this very key,
+        /// to ask for it by name. The key blob opens with its own name, which
+        /// tells a certificate from a plain key where `type` does not; an RSA
+        /// key is one key under three signature names, and a server may have
+        /// dropped ssh-rsa.
+        public var algorithms: [String] {
+            let name = Self.algorithm(opening: key) ?? type
+            switch name {
+            case "ssh-rsa":
+                return ["rsa-sha2-512", "rsa-sha2-256", "ssh-rsa"]
+            case "ssh-rsa-cert-v01@openssh.com":
+                return ["rsa-sha2-512-cert-v01@openssh.com", "rsa-sha2-256-cert-v01@openssh.com", "ssh-rsa-cert-v01@openssh.com"]
+            default:
+                return [name]
+            }
+        }
+
+        /// The name an SSH key blob opens with: a big-endian length, then the
+        /// name. Nil for a blob that does not open that way.
+        static func algorithm(opening blob: Data) -> String? {
+            let bytes = [UInt8](blob.prefix(4))
+            guard bytes.count == 4 else { return nil }
+            let length = Int(bytes[0]) << 24 | Int(bytes[1]) << 16 | Int(bytes[2]) << 8 | Int(bytes[3])
+            guard length > 0, length <= 64, blob.count >= 4 + length else { return nil }
+            return String(data: blob.dropFirst(4).prefix(length), encoding: .utf8)
+        }
     }
 
     public static let shared = KnownHosts()
@@ -69,7 +96,19 @@ public final class KnownHosts: @unchecked Sendable {
         NSRemoteShell.hostKeyVerifier = { host, port, type, key in
             KnownHosts.shared.accepts(HostKey(type: type, key: key), host: host, port: port.intValue)
         }
+        NSRemoteShell.hostKeyPreference = { host, port in
+            KnownHosts.shared.preferredAlgorithms(host: host, port: port.intValue)
+        }
     }()
+
+    /// The host key algorithms to ask the address for first: those that
+    /// present the saved key. A server with several host keys shows the
+    /// first kind asked for, and the SSH library's own order has changed
+    /// between versions; without this, the key saved under one order looks
+    /// like a changed key under the next. Empty with nothing saved.
+    public func preferredAlgorithms(host: String, port: Int) -> [String] {
+        savedKey(host: host, port: port)?.algorithms ?? []
+    }
 
     /// True for the key saved for the address, and for the first key seen
     /// there, which is saved. False for any other key.
@@ -136,7 +175,7 @@ public final class KnownHosts: @unchecked Sendable {
     /// reason; nil when it was not.
     public func refusalMessage(host: String, port: Int) -> String? {
         guard let offered = refusedKey(host: host, port: port) else { return nil }
-        var lines = [String(localized: "The host key of \(host):\(port) has changed, so the connection was refused.")]
+        var lines = [String(localized: "The host key of \(host):\(String(port)) has changed, so the connection was refused.")]
         if let saved = savedKey(host: host, port: port) {
             lines.append(String(localized: "Saved: \(saved.type) \(saved.fingerprint)"))
         }

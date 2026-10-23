@@ -27,6 +27,7 @@
             directory = FileManager.default.temporaryDirectory.appendingPathComponent("ta-\(UUID().uuidString.prefix(6))")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try run("/usr/bin/ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", path("host"))
+            try run("/usr/bin/ssh-keygen", "-q", "-t", "ecdsa", "-N", "", "-f", path("host_ecdsa"))
             try run("/usr/bin/ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "accepted", "-f", path("accepted"))
             try run("/usr/bin/ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "refused", "-f", path("refused"))
             try FileManager.default.copyItem(atPath: path("accepted.pub"), toPath: path("authorized_keys"))
@@ -36,6 +37,7 @@
             Port \(port)
             ListenAddress 127.0.0.1
             HostKey \(path("host"))
+            HostKey \(path("host_ecdsa"))
             PidFile \(path("sshd.pid"))
             AuthorizedKeysFile \(path("authorized_keys"))
             StrictModes no
@@ -91,6 +93,32 @@
                 XCTAssertTrue(shell.isAuthenticated, "\(type): \(error ?? "")")
                 shell.destroyPermanently()
             }
+        }
+
+        // The SSH library's own order of host key kinds has changed between
+        // versions (1.10 asked for ECDSA first, 1.11 for Ed25519), and the
+        // server presents the first kind asked for. A key saved under either
+        // order has to be the one presented, or it looks changed.
+        func testTheSavedHostKeyIsPresentedWhateverTheLibraryPrefers() throws {
+            try addToAgent("accepted")
+            let first = signIn(with: agentIdentity())
+            XCTAssertTrue(first.0.isAuthenticated, first.1 ?? "")
+            first.0.destroyPermanently()
+            let learned = try XCTUnwrap(KnownHosts.shared.savedKey(host: "127.0.0.1", port: port))
+
+            // Save the server's other key, the one the library would not ask for.
+            KnownHosts.shared.forget(host: "127.0.0.1", port: port)
+            let other = learned.type == "ssh-ed25519" ? "host_ecdsa.pub" : "host.pub"
+            let line = try String(contentsOfFile: path(other), encoding: .utf8).split(separator: " ")
+            let otherKey = KnownHosts.HostKey(type: String(line[0]), key: try XCTUnwrap(Data(base64Encoded: String(line[1]))))
+            XCTAssertNotEqual(otherKey.type, learned.type)
+            XCTAssertTrue(KnownHosts.shared.accepts(otherKey, host: "127.0.0.1", port: port))
+
+            let (shell, error) = signIn(with: agentIdentity())
+            XCTAssertNil(shell.hostKeyRefusal)
+            XCTAssertTrue(shell.isAuthenticated, error ?? "")
+            XCTAssertEqual(KnownHosts.shared.savedKey(host: "127.0.0.1", port: port), otherKey, "the saved key is kept, not replaced")
+            shell.destroyPermanently()
         }
 
         func testANamedKeyIsTheOnlyOneOffered() throws {

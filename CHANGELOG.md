@@ -13,6 +13,14 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+### Fixed
+- **Servers saved before 0.2.16 connect again.** The SSH library 0.2.16
+  brought in asks a server for its Ed25519 host key first, where the one
+  before asked for ECDSA, so every server whose key Tamio had saved looked as
+  if its key had changed and was refused as offline. Tamio now asks each
+  server for the kind of key it has saved, as OpenSSH does, so saved keys
+  keep working and none has to be forgotten.
+
 ## [0.2.16] - 2026-10-23
 
 ### Fixed

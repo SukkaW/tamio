@@ -67,6 +67,26 @@ final class KnownHostsTests: XCTestCase {
         XCTAssertEqual(reopened.count, 0)
     }
 
+    func testTheSavedKeyIsAskedForByItsOwnName() throws {
+        XCTAssertEqual(hosts.preferredAlgorithms(host: "example.com", port: 22), [], "nothing is preferred before a key is saved")
+
+        // The key blobs OpenSSH writes: each opens with its algorithm's name.
+        let ecdsa = try XCTUnwrap(Data(base64Encoded: "AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBHxk"))
+        XCTAssertTrue(hosts.accepts(KnownHosts.HostKey(type: "ecdsa-sha2-nistp256", key: ecdsa), host: "example.com", port: 22))
+        XCTAssertEqual(hosts.preferredAlgorithms(host: "example.com", port: 22), ["ecdsa-sha2-nistp256"])
+
+        let rsa = try XCTUnwrap(Data(base64Encoded: "AAAAB3NzaC1yc2EAAAADAQABAAABAQ=="))
+        XCTAssertEqual(KnownHosts.HostKey(type: "ssh-rsa", key: rsa).algorithms,
+                       ["rsa-sha2-512", "rsa-sha2-256", "ssh-rsa"], "one RSA key answers to each signature name")
+
+        // A certificate's blob names the certificate, where the type the
+        // library reports names only the key inside it.
+        let certificate = try XCTUnwrap(Data(base64Encoded: "AAAAIHNzaC1lZDI1NTE5LWNlcnQtdjAxQG9wZW5zc2guY29tAAAAIA=="))
+        XCTAssertEqual(KnownHosts.HostKey(type: "ssh-ed25519", key: certificate).algorithms, ["ssh-ed25519-cert-v01@openssh.com"])
+
+        XCTAssertEqual(first.algorithms, ["ssh-ed25519"], "a blob that names nothing falls back to the type")
+    }
+
     func testTheFingerprintIsTheOneSSHPrints() {
         // SHA-256 of an empty key, base64 without padding.
         let empty = KnownHosts.HostKey(type: "ssh-ed25519", key: Data())
