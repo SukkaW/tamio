@@ -13,6 +13,8 @@ the user. To release, rename that heading to the version and date
 
 ## [Unreleased]
 
+## [0.2.17] - 2026-10-23
+
 ### Fixed
 - **Servers saved before 0.2.16 connect again.** The SSH library 0.2.16
   brought in asks a server for its Ed25519 host key first, where the one
